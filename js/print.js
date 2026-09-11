@@ -8,6 +8,7 @@ import { computeLayout, toMM, PAGE_FORMATS } from './layout-engine.js';
 import { renderLabelToNode, PX_PER_MM } from './editor.js';
 
 const SCREEN_PX_PER_MM = PX_PER_MM; // 3.78px/mm at 96dpi
+let customPrintScale = null; // null means "fit to screen", otherwise it's a multiplier for PX_PER_MM
 
 /* ---------- Render Print Preview (on-screen, scaled) ---------- */
 
@@ -29,8 +30,11 @@ function renderPrintPreview() {
   // Update summary info
   updatePrintSummary(layout, labels);
 
-  // Screen scale factor: fit page preview to ~600px width
-  const screenScale = 600 / area.pageWidth;
+  // Screen scale factor: if customPrintScale is set, use it for 1:1 mapping (1mm = PX_PER_MM * customPrintScale pixels)
+  // Otherwise, fit page preview to ~600px width
+  const screenScale = customPrintScale !== null 
+    ? (SCREEN_PX_PER_MM * customPrintScale) 
+    : (600 / area.pageWidth);
 
   for (const page of pages) {
     const pageDiv = document.createElement('div');
@@ -71,6 +75,8 @@ function renderPrintPreview() {
 
 function renderCutMarks(pageDiv, page, area, grid, scale, unit = 'px', includeMarginOffset = false) {
   if (page.labels.length === 0) return;
+  const cutMarksType = state.printSettings.cutMarksType || 'both';
+  if (cutMarksType === 'none') return;
 
   const firstLabel = page.labels[0];
   const labelW = firstLabel.widthMM;
@@ -80,8 +86,13 @@ function renderCutMarks(pageDiv, page, area, grid, scale, unit = 'px', includeMa
 
   // Horizontal cut marks
   for (let row = 0; row <= grid.rows; row++) {
+    const isOutside = (row === 0 || row === grid.rows);
+    const isInside = (row > 0 && row < grid.rows);
+    
+    if (cutMarksType === 'inside' && isOutside) continue;
+    if (cutMarksType === 'outside' && isInside) continue;
+
     const y = marginOffset + firstLabel.y + row * (labelH + gapMM) - gapMM / 2;
-    if (row === 0) continue; // Skip first line (top of labels)
 
     const mark = document.createElement('div');
     mark.style.cssText = `
@@ -97,8 +108,13 @@ function renderCutMarks(pageDiv, page, area, grid, scale, unit = 'px', includeMa
 
   // Vertical cut marks
   for (let col = 0; col <= grid.cols; col++) {
+    const isOutside = (col === 0 || col === grid.cols);
+    const isInside = (col > 0 && col < grid.cols);
+
+    if (cutMarksType === 'inside' && isOutside) continue;
+    if (cutMarksType === 'outside' && isInside) continue;
+
     const x = marginOffset + firstLabel.x + col * (labelW + gapMM) - gapMM / 2;
-    if (col === 0) continue;
 
     const mark = document.createElement('div');
     mark.style.cssText = `
@@ -137,7 +153,36 @@ function updatePrintSummary(layout, labels) {
       <span style="color: var(--text-secondary); font-size: 0.8rem;">Pages required:</span>
       <strong style="font-size: 0.9rem; color: var(--accent-secondary);">${pages.length}</strong>
     </div>
+    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-subtle);">
+      <div class="form-row" style="margin-bottom: 8px;">
+        <span style="color: var(--text-secondary); font-size: 0.8rem;">Preview Scale:</span>
+        <button id="btn-toggle-1-1" class="btn btn-ghost btn-sm">1:1 Real Size</button>
+      </div>
+      <div id="scale-slider-container" style="display: ${customPrintScale !== null ? 'block' : 'none'};">
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <input type="range" id="print-scale-slider" min="0.5" max="2" step="0.01" value="${customPrintScale || 1}" style="flex: 1;">
+          <span id="print-scale-val" style="font-size: 0.8rem; width: 35px;">${Math.round((customPrintScale || 1)*100)}%</span>
+        </div>
+        <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px;">Adjust so the on-screen preview perfectly matches physical dimensions.</p>
+      </div>
+    </div>
   `;
+
+  // Attach event listeners for 1:1 scaling
+  document.getElementById('btn-toggle-1-1')?.addEventListener('click', () => {
+    if (customPrintScale !== null) {
+      customPrintScale = null; // back to fit
+    } else {
+      customPrintScale = 1; // 1:1 CSS pixels
+    }
+    renderPrintPreview();
+  });
+
+  document.getElementById('print-scale-slider')?.addEventListener('input', (e) => {
+    customPrintScale = parseFloat(e.target.value);
+    document.getElementById('print-scale-val').textContent = `${Math.round(customPrintScale*100)}%`;
+    renderPrintPreview();
+  });
 }
 
 /* ---------- Actual Print (physical) ---------- */
@@ -172,7 +217,9 @@ function triggerPrint() {
   }
   printStyle.textContent = `
     @media print {
-      @page { size: ${pageSize}; margin: ${marginMM}mm; }
+      @page { size: ${pageSize}; margin: 0 !important; }
+      body { margin: 0 !important; padding: 0 !important; }
+      .print-page { width: ${area.pageWidth}mm !important; height: ${area.pageHeight}mm !important; margin: 0 !important; padding: 0 !important; border: none !important; }
     }
   `;
 
@@ -180,8 +227,8 @@ function triggerPrint() {
   for (const page of pages) {
     const pageDiv = document.createElement('div');
     pageDiv.className = 'print-page';
-    pageDiv.style.width = `${area.printableWidth}mm`;
-    pageDiv.style.height = `${area.printableHeight}mm`;
+    pageDiv.style.width = `${area.pageWidth}mm`;
+    pageDiv.style.height = `${area.pageHeight}mm`;
     pageDiv.style.position = 'relative';
     pageDiv.style.pageBreakAfter = 'always';
     pageDiv.style.overflow = 'hidden';
@@ -190,8 +237,8 @@ function triggerPrint() {
       const cell = document.createElement('div');
       cell.className = 'print-label-cell';
       cell.style.position = 'absolute';
-      cell.style.left = `${entry.x}mm`;
-      cell.style.top = `${entry.y}mm`;
+      cell.style.left = `${area.marginMM + entry.x}mm`;
+      cell.style.top = `${area.marginMM + entry.y}mm`;
       cell.style.width = `${entry.widthMM}mm`;
       cell.style.height = `${entry.heightMM}mm`;
       cell.style.overflow = 'hidden';
@@ -204,9 +251,9 @@ function triggerPrint() {
       pageDiv.appendChild(cell);
     }
 
-    // Cut marks for physical print (includeMarginOffset = false)
+    // Cut marks for physical print
     if (state.printSettings.showCutMarks && !state.printSettings.singleLabel) {
-      renderCutMarks(pageDiv, page, area, page.grid, 1, 'mm', false);
+      renderCutMarks(pageDiv, page, area, page.grid, 1, 'mm', true);
     }
 
     printContainer.appendChild(pageDiv);

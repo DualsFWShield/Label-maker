@@ -57,6 +57,7 @@ const SAMPLE_LABELS = [
     bg_color: '#eff6ff',
     border_color: '#3b82f6',
     image_url: '',
+    image_required: false,
   },
   {
     name: 'Huile d\'Olive',
@@ -82,15 +83,16 @@ const SAMPLE_LABELS = [
     bg_color: '#f0fdf4',
     border_color: '#16a34a',
     image_url: '',
+    image_required: true,
   },
 ];
 
 /* ---------- Template Generators ---------- */
 
 function generateCSVTemplate() {
-  const headers = 'name,line2,line3,width_mm,height_mm,font,font_size,bold,italic,text_color,font2,size2,bold2,italic2,color2,font3,size3,bold3,italic3,color3,bg_color,border_color,image_url';
+  const headers = 'name,line2,line3,width_mm,height_mm,font,font_size,bold,italic,text_color,font2,size2,bold2,italic2,color2,font3,size3,bold3,italic3,color3,bg_color,border_color,image_url,image_required';
   const rows = SAMPLE_LABELS.map((l) =>
-    `"${l.name}","${l.line2}","${l.line3}",${l.width_mm},${l.height_mm},"${l.font}",${l.font_size},${l.bold},${l.italic},"${l.text_color}","${l.font2}",${l.size2},${l.bold2},${l.italic2},"${l.color2}","${l.font3}",${l.size3},${l.bold3},${l.italic3},"${l.color3}","${l.bg_color}","${l.border_color}","${l.image_url}"`
+    `"${l.name}","${l.line2}","${l.line3}",${l.width_mm},${l.height_mm},"${l.font}",${l.font_size},${l.bold},${l.italic},"${l.text_color}","${l.font2}",${l.size2},${l.bold2},${l.italic2},"${l.color2}","${l.font3}",${l.size3},${l.bold3},${l.italic3},"${l.color3}","${l.bg_color}","${l.border_color}","${l.image_url}",${l.image_required}`
   );
   return headers + '\n' + rows.join('\n');
 }
@@ -122,15 +124,16 @@ function generateJSONTemplate() {
       bg_color: 'Hex color for background (default: #ffffff)',
       border_color: 'Hex color for border (default: none)',
       image_url: 'URL to an image/illustration (optional)',
+      image_required: 'true/false indicating if this label needs an image (optional)',
     },
     labels: SAMPLE_LABELS,
   }, null, 2);
 }
 
 function generateTXTTemplate() {
-  const headers = 'name\tline2\tline3\twidth_mm\theight_mm\tfont\tfont_size\tbold\titalic\ttext_color\tfont2\tsize2\tbold2\titalic2\tcolor2\tfont3\tsize3\tbold3\titalic3\tcolor3\tbg_color\tborder_color\timage_url';
+  const headers = 'name\tline2\tline3\twidth_mm\theight_mm\tfont\tfont_size\tbold\titalic\ttext_color\tfont2\tsize2\tbold2\titalic2\tcolor2\tfont3\tsize3\tbold3\titalic3\tcolor3\tbg_color\tborder_color\timage_url\timage_required';
   const rows = SAMPLE_LABELS.map((l) =>
-    `${l.name}\t${l.line2}\t${l.line3}\t${l.width_mm}\t${l.height_mm}\t${l.font}\t${l.font_size}\t${l.bold}\t${l.italic}\t${l.text_color}\t${l.font2}\t${l.size2}\t${l.bold2}\t${l.italic2}\t${l.color2}\t${l.font3}\t${l.size3}\t${l.bold3}\t${l.italic3}\t${l.color3}\t${l.bg_color}\t${l.border_color}\t${l.image_url}`
+    `${l.name}\t${l.line2}\t${l.line3}\t${l.width_mm}\t${l.height_mm}\t${l.font}\t${l.font_size}\t${l.bold}\t${l.italic}\t${l.text_color}\t${l.font2}\t${l.size2}\t${l.bold2}\t${l.italic2}\t${l.color2}\t${l.font3}\t${l.size3}\t${l.bold3}\t${l.italic3}\t${l.color3}\t${l.bg_color}\t${l.border_color}\t${l.image_url}\t${l.image_required}`
   );
   return headers + '\n' + rows.join('\n');
 }
@@ -142,8 +145,8 @@ async function generateXLSXTemplate() {
   }
 
   const data = [
-    ['name', 'line2', 'line3', 'width_mm', 'height_mm', 'font', 'font_size', 'bold', 'italic', 'text_color', 'font2', 'size2', 'bold2', 'italic2', 'color2', 'font3', 'size3', 'bold3', 'italic3', 'color3', 'bg_color', 'border_color', 'image_url'],
-    ...SAMPLE_LABELS.map((l) => [l.name, l.line2, l.line3, l.width_mm, l.height_mm, l.font, l.font_size, l.bold, l.italic, l.text_color, l.font2, l.size2, l.bold2, l.italic2, l.color2, l.font3, l.size3, l.bold3, l.italic3, l.color3, l.bg_color, l.border_color, l.image_url]),
+    ['name', 'line2', 'line3', 'width_mm', 'height_mm', 'font', 'font_size', 'bold', 'italic', 'text_color', 'font2', 'size2', 'bold2', 'italic2', 'color2', 'font3', 'size3', 'bold3', 'italic3', 'color3', 'bg_color', 'border_color', 'image_url', 'image_required'],
+    ...SAMPLE_LABELS.map((l) => [l.name, l.line2, l.line3, l.width_mm, l.height_mm, l.font, l.font_size, l.bold, l.italic, l.text_color, l.font2, l.size2, l.bold2, l.italic2, l.color2, l.font3, l.size3, l.bold3, l.italic3, l.color3, l.bg_color, l.border_color, l.image_url, l.image_required]),
   ];
 
   const ws = XLSX.utils.aoa_to_sheet(data);
@@ -201,7 +204,20 @@ function rowToLabel(row) {
   const textColor = row.text_color || row.couleur || '#000000';
   const bgColor = row.bg_color || row.fond || '#ffffff';
   const borderColor = row.border_color || row.bordure || '';
-  const imageUrl = row.image_url || row.image || row.illustration || '';
+  let imageUrl = row.image_url || row.image || row.illustration || '';
+  if (typeof imageUrl === 'string') {
+    const lowerUrl = imageUrl.toLowerCase().trim();
+    if (lowerUrl === "pas d'image" || lowerUrl === "none" || lowerUrl === "false" || lowerUrl === "0" || lowerUrl === "non") {
+      imageUrl = '';
+    }
+  }
+
+  // Check if image is required (even if header is missing, by scanning row values)
+  const allValuesStr = Object.values(row).join(' ').toLowerCase();
+  let imageRequired = parseBool(row.image_required || row.image_requise || row.image_needed || false);
+  if (!imageRequired && (allValuesStr.includes('dessin requis') || allValuesStr.includes('dessin rouleau'))) {
+    imageRequired = true;
+  }
 
   const label = createDefaultLabel({
     name,
@@ -288,12 +304,12 @@ function rowToLabel(row) {
     });
   }
 
-  // Add image element if URL provided
-  if (imageUrl) {
+  // Add image element if URL provided or explicitly required
+  if (imageUrl || imageRequired) {
     label.elements.push({
       id: crypto.randomUUID(),
       type: 'image',
-      src: imageUrl,
+      src: imageUrl || '',
       imageId: null,
       x: 70,
       y: 5,

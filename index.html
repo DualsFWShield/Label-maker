@@ -15,6 +15,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
   <style>
     .hidden { display: none !important; }
+    .hidden-view { display: none !important; }
   </style>
 </head>
 <body>
@@ -28,46 +29,39 @@
   <!-- ===== Header ===== -->
   <header id="app-header">
     <div class="logo">
+      <button id="btn-mobile-sidebar" class="mobile-toggle" title="Menu"><i data-lucide="menu"></i></button>
       <img src="assets/icon-192.png" alt="Label Maker Studio" width="28" height="28">
       <span>Label Maker</span>
     </div>
 
     <nav class="header-nav">
-      <button data-view="editor" class="active">
-        <i data-lucide="pen-tool"></i>
-        Editor
-      </button>
-      <button data-view="print">
-        <i data-lucide="printer"></i>
-        Print
-      </button>
-      <button data-view="import">
-        <i data-lucide="upload"></i>
-        Import
-      </button>
+      <button data-view="editor" class="active"><i data-lucide="edit-3"></i> <span>Editor</span></button>
+      <button data-view="print"><i data-lucide="printer"></i> <span>Print</span></button>
+      <button data-view="import"><i data-lucide="upload-cloud"></i> <span>Import</span></button>
     </nav>
 
     <div class="header-actions">
-      <button id="btn-undo" class="btn btn-ghost btn-icon" title="Undo (Ctrl+Z)">
-        <i data-lucide="undo-2"></i>
+      <button id="btn-undo" class="btn btn-ghost btn-icon" title="Undo"><i data-lucide="corner-up-left"></i></button>
+      <button id="btn-redo" class="btn btn-ghost btn-icon" title="Redo"><i data-lucide="corner-up-right"></i></button>
+      <div class="divider"></div>
+      <button id="btn-export-project" class="btn btn-ghost btn-sm" title="Export labels">
+        <i data-lucide="download"></i> <span>Export</span>
       </button>
-      <button id="btn-redo" class="btn btn-ghost btn-icon" title="Redo (Ctrl+Y)">
-        <i data-lucide="redo-2"></i>
+      <button id="btn-import-project" class="btn btn-ghost btn-sm" title="Import labels">
+        <i data-lucide="folder-open"></i> <span>Import</span>
       </button>
-      <button id="btn-export-project" class="btn btn-ghost btn-sm" title="Export project">
-        <i data-lucide="download"></i> Export
-      </button>
-      <button id="btn-import-project" class="btn btn-ghost btn-sm" title="Import project">
-        <i data-lucide="folder-open"></i> Open
-      </button>
-      <button id="btn-install-pwa" class="btn btn-secondary btn-sm" style="display:none;" title="Install app">
-        <i data-lucide="smartphone"></i> Install
+      <button id="btn-install-pwa" class="btn btn-primary btn-sm hidden" title="Install app">
+        <i data-lucide="smartphone"></i> <span>Install</span>
       </button>
       <button id="btn-force-update" class="btn btn-ghost btn-sm" title="Force update (clear cache)">
         <i data-lucide="refresh-cw"></i>
       </button>
+      <button id="btn-mobile-labels" class="mobile-toggle" title="Labels"><i data-lucide="tags"></i></button>
     </div>
   </header>
+
+  <!-- Mobile Overlay -->
+  <div id="mobile-overlay"></div>
 
   <!-- ===== Main Layout ===== -->
   <main id="app-main">
@@ -312,6 +306,22 @@
             </div>
           </div>
         </div>
+        <!-- Image Properties (visible when image element selected) -->
+        <div class="sidebar-section" id="image-section" style="display: none;">
+          <div class="sidebar-section-header">
+            <h3>Image</h3>
+            <i data-lucide="chevron-down"></i>
+          </div>
+          <div class="sidebar-section-content">
+            <div class="form-group">
+              <label for="img-url-input">Image URL or Data URI</label>
+              <textarea id="img-url-input" rows="3" style="font-size: 0.8rem; resize: vertical;" placeholder="https://..."></textarea>
+            </div>
+            <button id="btn-replace-image" class="btn btn-secondary btn-sm" style="width: 100%;">
+              <i data-lucide="upload"></i> Upload new image
+            </button>
+          </div>
+        </div>
 
         <!-- Typography (visible when text element selected) -->
         <div class="sidebar-section" id="typography-section" style="display: none;">
@@ -320,6 +330,10 @@
             <i data-lucide="chevron-down"></i>
           </div>
           <div class="sidebar-section-content">
+            <div class="form-group">
+              <label for="text-content">Text Content</label>
+              <textarea id="text-content" rows="3" style="font-size: 0.85rem; padding: 8px; width: 100%; box-sizing: border-box; resize: vertical;" placeholder="Enter text here..."></textarea>
+            </div>
             <div class="form-group">
               <label for="font-category">Category</label>
               <select id="font-category">
@@ -350,13 +364,24 @@
                 </select>
               </div>
             </div>
-            <div class="form-group">
-              <label>Style</label>
-              <div class="style-toggles">
-                <button id="btn-bold" class="style-toggle-btn" title="Bold"><b>B</b></button>
-                <button id="btn-italic" class="style-toggle-btn" title="Italic"><em>I</em></button>
-                <button id="btn-underline" class="style-toggle-btn" title="Underline"><u>U</u></button>
-                <button id="btn-strikethrough" class="style-toggle-btn" title="Strikethrough"><s>S</s></button>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Style</label>
+                <div class="style-toggles">
+                  <button id="btn-bold" class="style-toggle-btn" title="Bold"><b>B</b></button>
+                  <button id="btn-italic" class="style-toggle-btn" title="Italic"><em>I</em></button>
+                  <button id="btn-underline" class="style-toggle-btn" title="Underline"><u>U</u></button>
+                  <button id="btn-strikethrough" class="style-toggle-btn" title="Strikethrough"><s>S</s></button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="text-transform">Transform</label>
+                <select id="text-transform">
+                  <option value="none">Normal</option>
+                  <option value="uppercase">ABC</option>
+                  <option value="lowercase">abc</option>
+                  <option value="capitalize">Abc</option>
+                </select>
               </div>
             </div>
             <div class="form-row">
@@ -471,13 +496,13 @@
         </div>
 
         <div class="form-group">
-          <div class="toggle-wrapper">
-            <label class="toggle">
-              <input type="checkbox" id="print-cut-marks" checked>
-              <div class="toggle-track"></div>
-            </label>
-            <span style="font-size: 0.8rem; color: var(--text-secondary);">Cut marks</span>
-          </div>
+          <label for="print-cut-marks">Cut marks</label>
+          <select id="print-cut-marks">
+            <option value="none">None</option>
+            <option value="inside">Between labels</option>
+            <option value="outside">Outside edges</option>
+            <option value="both" selected>Both</option>
+          </select>
         </div>
 
         <div class="form-group">
@@ -560,6 +585,63 @@
 
   <!-- Print output (populated dynamically, hidden until printing) -->
   <div id="print-output"></div>
+
+  <!-- Modals -->
+  <div id="modal-overlay" class="hidden">
+    
+    <!-- Export Modal -->
+    <div id="export-modal" class="modal hidden">
+      <div class="modal-header">
+        <h3>Export Labels</h3>
+        <button class="btn-close-modal"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-content">
+        <div class="template-cards-grid">
+          <div class="template-card" id="btn-export-word">
+            <i data-lucide="file-text"></i>
+            <h4>Word Document</h4>
+            <p>.doc format</p>
+          </div>
+          <div class="template-card" id="btn-export-pdf">
+            <i data-lucide="file-check-2"></i>
+            <h4>PDF Document</h4>
+            <p>Print to PDF</p>
+          </div>
+          <div class="template-card" id="btn-export-csv">
+            <i data-lucide="file-spreadsheet"></i>
+            <h4>CSV File</h4>
+            <p>Importable</p>
+          </div>
+          <div class="template-card" id="btn-export-json">
+            <i data-lucide="file-json"></i>
+            <h4>JSON File</h4>
+            <p>Importable</p>
+          </div>
+          <div class="template-card" id="btn-export-labelstudio">
+            <i data-lucide="package"></i>
+            <h4>Project Backup</h4>
+            <p>.labelstudio</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Custom Prompt/Confirm Modal -->
+    <div id="dialog-modal" class="modal hidden">
+      <div class="modal-header">
+        <h3 id="dialog-title">Confirm</h3>
+      </div>
+      <div class="modal-content">
+        <p id="dialog-message"></p>
+        <input type="text" id="dialog-input" class="hidden" style="width: 100%; margin-top: 5px; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px;">
+      </div>
+      <div class="modal-actions">
+        <button id="dialog-btn-cancel" class="btn btn-outline">Cancel</button>
+        <button id="dialog-btn-confirm" class="btn btn-primary">OK</button>
+      </div>
+    </div>
+
+  </div>
 
   <!-- App Script -->
   <script type="module" src="js/app.js"></script>

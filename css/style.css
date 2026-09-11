@@ -985,19 +985,191 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
 .empty-state p { font-size: 0.8rem; max-width: 240px; }
 
 /* ===========================
-   Responsive
+   Responsive & Mobile Drawers
    =========================== */
 @media (max-width: 1100px) {
   #labels-panel { width: 220px; min-width: 220px; }
   :root { --sidebar-width: 290px; }
 }
 
+/* Hide toggles on desktop by default */
+.mobile-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 8px;
+  align-items: center;
+  justify-content: center;
+}
+.mobile-toggle:hover { color: var(--text-primary); }
+
 @media (max-width: 840px) {
-  #labels-panel { display: none; }
-  :root { --sidebar-width: 260px; }
+  /* Hide sidepanels by default, show as floating drawers when active */
+  #sidebar, #labels-panel, #print-settings-panel {
+    position: fixed;
+    top: var(--header-height);
+    bottom: 0;
+    z-index: 100;
+    transition: transform var(--transition-normal);
+    box-shadow: var(--shadow-lg);
+    background: var(--bg-secondary);
+  }
+  
+  #sidebar, #print-settings-panel {
+    left: 0;
+    transform: translateX(-100%);
+    width: 280px;
+    min-width: 280px;
+  }
+  #sidebar.mobile-open, #print-settings-panel.mobile-open { transform: translateX(0); }
+  
+  #labels-panel {
+    right: 0;
+    transform: translateX(100%);
+    width: 280px;
+  }
+  #labels-panel.mobile-open { transform: translateX(0); }
+  
+  /* Mobile drawer overlay */
+  #mobile-overlay {
+    position: fixed;
+    top: var(--header-height);
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 99;
+    display: none;
+    backdrop-filter: blur(2px);
+  }
+  #mobile-overlay.active { display: block; }
+  
+  /* Header mobile adjustments */
+  #app-header { 
+    padding: 0 8px;
+    gap: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  #app-header::-webkit-scrollbar { display: none; }
+
+  /* Mobile toggles & header text hiding */
+  .mobile-toggle {
+    display: inline-flex;
+    color: var(--text-primary);
+    padding: 6px;
+    border-radius: var(--radius-sm);
+  }
+  .mobile-toggle:hover { background: var(--bg-hover); }
+
+  .header-nav button span,
+  .header-actions .btn-sm span {
+    display: none;
+  }
+
+  .header-nav { margin-left: 4px; gap: 0; }
+  .header-nav button { padding: 8px; min-width: 0; }
+  .header-actions { gap: 2px; }
+  .header-actions .btn-sm { padding: 6px; }
+  .header-actions .btn-icon { padding: 6px; }
+  .header-actions .divider { display: none; }
+  
+  #app-header .logo span { display: none; }
+  #app-header .logo img { width: 24px; height: 24px; }
+
+  /* Print view responsive: stack vertically */
+  #view-print.active { flex-direction: column; }
+  #print-preview-area { padding: 16px; }
+
+  /* Import view responsive */
+  #import-panel { padding: 16px; }
+  .import-dropzone { padding: 24px; }
 }
 
-@media (max-width: 640px) {
-  #sidebar { display: none; }
-  #canvas-area { padding: 16px; }
+/* ===========================
+   Modals
+   =========================== */
+#modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 8, 25, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  transition: opacity var(--transition-fast);
+}
+
+#modal-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  transform: translateY(0);
+  transition: transform var(--transition-fast);
+}
+
+#modal-overlay.hidden .modal {
+  transform: translateY(20px);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.btn-close-modal {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+}
+.btn-close-modal:hover { color: var(--text-primary); }
+
+.modal-content {
+  padding: 20px;
+}
+
+.modal-actions {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* Quick utility to make elements stack nicely in modals */
+.modal-content p {
+  margin: 0 0 16px 0;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }

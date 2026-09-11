@@ -21,6 +21,7 @@ function createDefaultTextElement(overrides = {}) {
     fontWeight: 'normal',
     fontStyle: 'normal',
     textDecoration: 'none',
+    textTransform: 'none', // none | uppercase | lowercase | capitalize
     textAlign: 'center',
     lineHeight: 1.4,
     letterSpacing: 0,
@@ -102,7 +103,7 @@ const state = {
     orientation: 'portrait',
     marginMM: 5,
     gapMM: 2,
-    showCutMarks: true,
+    cutMarksType: 'both', // none | inside | outside | both
     singleLabel: false,
   },
   zoom: 1,

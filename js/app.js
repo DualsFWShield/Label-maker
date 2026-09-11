@@ -17,6 +17,7 @@ import {
 import { initEditor, addImageFromFile, addImageFromUrl, renderPreview } from './editor.js';
 import { initPrint, renderPrintPreview, triggerPrint } from './print.js';
 import { importFile, downloadTemplate } from './importer.js';
+import { exportLabelsToCSV, exportLabelsToJSON, exportLabelsToWord } from './exporter.js';
 import { FONT_CATALOGUE, loadFont, preloadCommonFonts, getFonts, getCategories, fontFamilyCSS } from './fonts.js';
 import { initPWA, promptInstall, forceUpdate } from './pwa.js';
 
@@ -78,7 +79,86 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-/* ---------- Navigation ---------- */
+/* ---------- Modals & Dialogs ---------- */
+
+function showModal(id) {
+  document.getElementById('modal-overlay').classList.remove('hidden');
+  document.getElementById(id).classList.remove('hidden');
+}
+
+function hideModals() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+  document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
+}
+
+document.querySelectorAll('.btn-close-modal').forEach(btn => {
+  btn.addEventListener('click', hideModals);
+});
+
+document.getElementById('modal-overlay')?.addEventListener('click', (e) => {
+  if (e.target === document.getElementById('modal-overlay')) hideModals();
+});
+
+function showConfirmDialog(message, okText = 'OK', cancelText = 'Cancel') {
+  return new Promise((resolve) => {
+    document.getElementById('dialog-title').textContent = 'Confirm';
+    document.getElementById('dialog-message').innerText = message;
+    const input = document.getElementById('dialog-input');
+    input.classList.add('hidden');
+    input.value = '';
+    
+    document.getElementById('dialog-btn-confirm').textContent = okText;
+    document.getElementById('dialog-btn-cancel').textContent = cancelText;
+
+    showModal('dialog-modal');
+
+    const handleConfirm = () => { cleanup(); resolve(true); };
+    const handleCancel = () => { cleanup(); resolve(false); };
+
+    function cleanup() {
+      document.getElementById('dialog-btn-confirm').removeEventListener('click', handleConfirm);
+      document.getElementById('dialog-btn-cancel').removeEventListener('click', handleCancel);
+      hideModals();
+    }
+
+    document.getElementById('dialog-btn-confirm').addEventListener('click', handleConfirm);
+    document.getElementById('dialog-btn-cancel').addEventListener('click', handleCancel);
+  });
+}
+
+function showPromptDialog(message, defaultValue = '', placeholder = '') {
+  return new Promise((resolve) => {
+    document.getElementById('dialog-title').textContent = 'Input';
+    document.getElementById('dialog-message').innerText = message;
+    const input = document.getElementById('dialog-input');
+    input.classList.remove('hidden');
+    input.value = defaultValue;
+    input.placeholder = placeholder;
+    
+    document.getElementById('dialog-btn-confirm').textContent = 'OK';
+    document.getElementById('dialog-btn-cancel').textContent = 'Cancel';
+
+    showModal('dialog-modal');
+    input.focus();
+
+    const handleConfirm = () => { cleanup(); resolve(input.value); };
+    const handleCancel = () => { cleanup(); resolve(null); };
+    const handleKey = (e) => { if(e.key === 'Enter') handleConfirm(); };
+
+    function cleanup() {
+      document.getElementById('dialog-btn-confirm').removeEventListener('click', handleConfirm);
+      document.getElementById('dialog-btn-cancel').removeEventListener('click', handleCancel);
+      input.removeEventListener('keydown', handleKey);
+      hideModals();
+    }
+
+    document.getElementById('dialog-btn-confirm').addEventListener('click', handleConfirm);
+    document.getElementById('dialog-btn-cancel').addEventListener('click', handleCancel);
+    input.addEventListener('keydown', handleKey);
+  });
+}
+
+/* ---------- Navigation & Mobile ---------- */
 
 function setupNavigation() {
   document.querySelectorAll('.header-nav button').forEach((btn) => {
@@ -92,6 +172,13 @@ function setupNavigation() {
       document.querySelectorAll('#view-editor, #view-print, #view-import').forEach((v) => v.classList.remove('active'));
       const viewEl = document.getElementById(`view-${view}`);
       if (viewEl) viewEl.classList.add('active');
+
+      // Toggle mobile labels button visibility
+      if (view === 'editor') {
+        document.getElementById('btn-mobile-labels')?.classList.remove('hidden-view');
+      } else {
+        document.getElementById('btn-mobile-labels')?.classList.add('hidden-view');
+      }
 
       if (view === 'print') renderPrintPreview();
     });
@@ -109,8 +196,42 @@ function setupHeaderActions() {
     redo() ? showToast('Redo', 'info') : showToast('Nothing to redo', 'warning');
   });
 
-  // Export project
+  // Export project / Labels
   document.getElementById('btn-export-project')?.addEventListener('click', () => {
+    showModal('export-modal');
+  });
+
+  document.getElementById('btn-export-word')?.addEventListener('click', () => {
+    hideModals();
+    exportLabelsToWord();
+    showToast('Exported to Word', 'success');
+  });
+
+  document.getElementById('btn-export-pdf')?.addEventListener('click', () => {
+    hideModals();
+    setView('print');
+    document.querySelectorAll('.header-nav button').forEach((b) => b.classList.remove('active'));
+    document.querySelector('.header-nav button[data-view="print"]')?.classList.add('active');
+    setTimeout(() => {
+      triggerPrint();
+      showToast('Select "Save as PDF" in the destination dropdown', 'info');
+    }, 100);
+  });
+
+  document.getElementById('btn-export-csv')?.addEventListener('click', () => {
+    hideModals();
+    exportLabelsToCSV();
+    showToast('Exported to CSV', 'success');
+  });
+
+  document.getElementById('btn-export-json')?.addEventListener('click', () => {
+    hideModals();
+    exportLabelsToJSON();
+    showToast('Exported to JSON', 'success');
+  });
+
+  document.getElementById('btn-export-labelstudio')?.addEventListener('click', () => {
+    hideModals();
     const json = exportProject();
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -139,6 +260,38 @@ function setupHeaderActions() {
     };
     input.click();
   });
+
+  // Mobile Drawers
+  const closeMobileDrawers = () => {
+    document.querySelectorAll('.mobile-open').forEach(a => a.classList.remove('mobile-open'));
+    document.getElementById('mobile-overlay')?.classList.remove('active');
+  };
+
+  document.getElementById('btn-mobile-sidebar')?.addEventListener('click', () => {
+    // Find the sidebar in the active view
+    const activeView = document.querySelector('main > div.active');
+    const sb = activeView?.querySelector('aside:not(#labels-panel)');
+    if (sb) {
+      const wasOpen = sb.classList.contains('mobile-open');
+      closeMobileDrawers(); // Close everything first
+      if (!wasOpen) {
+        sb.classList.add('mobile-open');
+        document.getElementById('mobile-overlay')?.classList.add('active');
+      }
+    }
+  });
+
+  document.getElementById('btn-mobile-labels')?.addEventListener('click', () => {
+    const lp = document.getElementById('labels-panel');
+    const wasOpen = lp.classList.contains('mobile-open');
+    closeMobileDrawers(); // Close everything first
+    if (!wasOpen) {
+      lp.classList.add('mobile-open');
+      document.getElementById('mobile-overlay')?.classList.add('active');
+    }
+  });
+
+  document.getElementById('mobile-overlay')?.addEventListener('click', closeMobileDrawers);
 
   // Install PWA
   document.getElementById('btn-install-pwa')?.addEventListener('click', promptInstall);
@@ -433,12 +586,21 @@ function setupBorderControls() {
 function setupTypographyControls() {
   const fontSelect = document.getElementById('font-select');
   const fontCategoryFilter = document.getElementById('font-category');
+  const textContent = document.getElementById('text-content');
   const fontSize = document.getElementById('font-size');
   const textColor = document.getElementById('text-color');
   const highlightColor = document.getElementById('highlight-color');
   const textAlign = document.getElementById('text-align');
   const lineHeight = document.getElementById('line-height');
   const letterSpacing = document.getElementById('letter-spacing');
+
+  textContent?.addEventListener('input', () => {
+    const el = getActiveElement();
+    const label = getActiveLabel();
+    if (el && label && el.type === 'text') {
+      updateElement(label.id, el.id, { content: textContent.value });
+    }
+  });
 
   // Populate font selector
   populateFontSelect(fontSelect);
@@ -504,6 +666,15 @@ function setupTypographyControls() {
     }
   });
 
+  const textTransform = document.getElementById('text-transform');
+  textTransform?.addEventListener('change', () => {
+    const el = getActiveElement();
+    const label = getActiveLabel();
+    if (el && label && el.type === 'text') {
+      updateElement(label.id, el.id, { textTransform: textTransform.value });
+    }
+  });
+
   // Style toggles
   document.getElementById('btn-bold')?.addEventListener('click', () => {
     const el = getActiveElement();
@@ -550,6 +721,8 @@ function populateFontSelect(select, category = '') {
     const option = document.createElement('option');
     option.value = font.name;
     option.textContent = font.name;
+    // Apply the font family to the option so it previews in the dropdown
+    option.style.fontFamily = fontFamilyCSS(font.name);
     select.appendChild(option);
   }
 }
@@ -579,14 +752,13 @@ function setupElementActions() {
     input.click();
   });
 
-  document.getElementById('btn-add-image-url')?.addEventListener('click', () => {
-    const url = prompt('Enter image URL:');
+  document.getElementById('btn-add-image-url')?.addEventListener('click', async () => {
+    const label = getActiveLabel();
+    if (!label) return;
+    const url = await showPromptDialog('Enter image URL:');
     if (url) {
-      const label = getActiveLabel();
-      if (label) {
-        addImageFromUrl(label.id, url);
-        showToast('Image added', 'success');
-      }
+      addImageFromUrl(label.id, url);
+      showToast('Image added', 'success');
     }
   });
 
@@ -597,6 +769,39 @@ function setupElementActions() {
       removeElement(label.id, el.id);
       showToast('Element removed', 'info');
     }
+  });
+
+  // Image editing
+  const imgUrlInput = document.getElementById('img-url-input');
+  imgUrlInput?.addEventListener('change', () => {
+    const label = getActiveLabel();
+    const el = getActiveElement();
+    if (label && el && el.type === 'image') {
+      updateElement(label.id, el.id, { src: imgUrlInput.value });
+    }
+  });
+
+  document.getElementById('btn-replace-image')?.addEventListener('click', () => {
+    const label = getActiveLabel();
+    const el = getActiveElement();
+    if (!label || !el || el.type !== 'image') return;
+    
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+          const dataUrl = ev.target.result;
+          updateElement(label.id, el.id, { src: dataUrl });
+          showToast('Image replaced', 'success');
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
   });
 }
 
@@ -651,19 +856,22 @@ function updateSidebarUI() {
   toggleBackgroundSections(label.background.type);
 
   // Border
-  const borderCheckbox = document.getElementById('border-enabled');
+    const borderCheckbox = document.getElementById('border-enabled');
   if (borderCheckbox) borderCheckbox.checked = label.border.enabled;
   setInputValue('border-width', label.border.width);
   setInputValue('border-style', label.border.style);
   setInputValue('border-color', label.border.color);
-  setInputValue('border-radius', label.border.radius);
-
-  // Typography (if text element selected)
+  setInputValue('border-radius', label.border.radius);  // Element properties
   const typoSection = document.getElementById('typography-section');
+  const imageSection = document.getElementById('image-section');
   const elementSection = document.getElementById('element-section');
+
+  if (typoSection) typoSection.style.display = 'none';
+  if (imageSection) imageSection.style.display = 'none';
 
   if (element && element.type === 'text') {
     if (typoSection) typoSection.style.display = '';
+    setInputValue('text-content', element.content || '');
     setInputValue('font-select', element.fontFamily);
     setInputValue('font-size', element.fontSize);
     setInputValue('text-color', element.color);
@@ -671,14 +879,16 @@ function updateSidebarUI() {
     setInputValue('text-align', element.textAlign);
     setInputValue('line-height', element.lineHeight);
     setInputValue('letter-spacing', element.letterSpacing);
+    setInputValue('text-transform', element.textTransform || 'none');
 
     // Toggle buttons
     toggleActiveClass('btn-bold', element.fontWeight === 'bold');
     toggleActiveClass('btn-italic', element.fontStyle === 'italic');
-    toggleActiveClass('btn-underline', element.textDecoration === 'underline');
-    toggleActiveClass('btn-strikethrough', element.textDecoration === 'line-through');
-  } else {
-    if (typoSection) typoSection.style.display = element ? '' : 'none';
+    toggleActiveClass('btn-underline', element.textDecoration?.includes('underline'));
+    toggleActiveClass('btn-strikethrough', element.textDecoration?.includes('line-through'));
+  } else if (element && element.type === 'image') {
+    if (imageSection) imageSection.style.display = '';
+    setInputValue('img-url-input', element.src || '');
   }
 
   if (elementSection) {
@@ -726,15 +936,15 @@ function setupLabelsPanel() {
     }
   });
 
-  document.getElementById('btn-delete-selected')?.addEventListener('click', () => {
-    if (state.selectedLabelIds.size > 0 && confirm(`Delete ${state.selectedLabelIds.size} selected label(s)?`)) {
+  document.getElementById('btn-delete-selected')?.addEventListener('click', async () => {
+    if (state.selectedLabelIds.size > 0 && await showConfirmDialog(`Delete ${state.selectedLabelIds.size} selected label(s)?`)) {
       deleteSelectedLabels();
       showToast('Labels deleted', 'info');
     }
   });
 
-  document.getElementById('btn-clear-labels')?.addEventListener('click', () => {
-    if (state.labels.length > 0 && confirm('Are you sure you want to delete ALL labels?')) {
+  document.getElementById('btn-clear-labels')?.addEventListener('click', async () => {
+    if (state.labels.length > 0 && await showConfirmDialog('Are you sure you want to delete ALL labels?')) {
       deleteAllLabels();
       showToast('All labels cleared', 'info');
     }
@@ -778,8 +988,11 @@ function updateLabelsPanelUI() {
         <input type="checkbox" ${isSelected ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;">
       </div>
       <div class="label-card-thumbnail" style="background: ${label.background.color || '#fff'}"></div>
-      <div class="label-card-info">
-        <h4>${escapeHtml(label.name)}</h4>
+      <div class="label-card-info" style="flex: 1; min-width: 0;">
+        <h4 style="display: flex; align-items: center; gap: 6px;">
+          ${escapeHtml(label.name)}
+          ${label.elements.some(el => el.type === 'image') ? '<i data-lucide="image" style="width: 14px; height: 14px; color: var(--text-secondary);" title="Contains Image"></i>' : ''}
+        </h4>
         <span>${label.widthMM}×${label.heightMM} ${unit} · ×${label.copies ?? 1}</span>
       </div>
       <div class="label-card-actions">
@@ -844,7 +1057,7 @@ function setupPrintPanel() {
   });
 
   cutMarks?.addEventListener('change', () => {
-    updatePrintSettings({ showCutMarks: cutMarks.checked });
+    updatePrintSettings({ cutMarksType: cutMarks.value });
   });
 
   singleLabel?.addEventListener('change', () => {
@@ -901,7 +1114,8 @@ function setupImportView() {
 async function handleImport(file) {
   try {
     if (state.labels.length > 0) {
-      if (confirm('You already have labels. Do you want to Append the new ones?\n\nClick OK to Append, or Cancel to Replace.')) {
+      const append = await showConfirmDialog('You already have labels. Do you want to Append the new ones?\n\nClick OK to Append, or Cancel to Replace.', 'Append', 'Replace');
+      if (append) {
         // Append -> do nothing
       } else {
         // Replace -> clear existing

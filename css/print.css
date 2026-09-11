@@ -22,13 +22,17 @@
   }
 
   /* Reset */
+  body, .print-page, .print-label-cell, .label-render, * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+  
   body {
     margin: 0;
     padding: 0;
     background: white;
     color: black;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
   }
 
   /* Default A4 page */
@@ -64,6 +68,7 @@
     height: 100%;
     position: relative;
     overflow: hidden;
+    box-sizing: border-box;
   }
 
   /* Cut marks */

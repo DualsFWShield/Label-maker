@@ -23,6 +23,31 @@ function mmToPx(mm) { return mm * PX_PER_MM; }
 
 /* ---------- Auto Layout Engine ---------- */
 
+function measureTextHeightMM(element, widthMM) {
+  const div = document.createElement('div');
+  div.style.position = 'absolute';
+  div.style.visibility = 'hidden';
+  // Subtract padding from width to match the actual rendered label-text-element (4px padding * 2 sides)
+  const paddingPx = 8; // 4px padding on each side of .label-text-element
+  div.style.width = `${widthMM * PX_PER_MM - paddingPx}px`;
+  div.style.fontFamily = fontFamilyCSS(element.fontFamily);
+  div.style.fontSize = `${element.fontSize}px`;
+  div.style.fontWeight = element.fontWeight;
+  div.style.fontStyle = element.fontStyle;
+  div.style.lineHeight = element.lineHeight;
+  div.style.letterSpacing = `${element.letterSpacing}px`;
+  div.style.textTransform = element.textTransform || 'none';
+  div.style.whiteSpace = 'pre-wrap';
+  div.style.wordBreak = 'break-word';
+  div.style.padding = '4px'; // match .label-text-element padding
+  div.style.boxSizing = 'content-box';
+  div.textContent = element.content;
+  document.body.appendChild(div);
+  const heightPx = div.offsetHeight;
+  document.body.removeChild(div);
+  return heightPx / PX_PER_MM;
+}
+
 /**
  * Compute automatic positions for all elements on a label.
  * Returns a Map<elementId, {x, y, width, height}> with overridden positions (in %).
@@ -73,19 +98,53 @@ function computeAutoLayout(label) {
     }
   }
 
-  // Layout text elements: stack vertically inside textZone
+  // Layout text elements: pack tightly vertically inside textZone
   if (textElements.length > 0) {
-    const lineH = textZone.h / textElements.length;
-
-    textElements.forEach((el, idx) => {
-      positions.set(el.id, {
-        x: textZone.x,
-        y: textZone.y + idx * lineH,
-        width: textZone.w,
-        height: lineH,
-        vAlign: vAlign, // Pass vAlign to renderer
-      });
+    // Calculate required height for each line using real DOM measurement (handles word wrapping)
+    const availableWidthMM = label.widthMM * (textZone.w / 100);
+    const heights = textElements.map((el) => {
+      const hMM = measureTextHeightMM(el, availableWidthMM);
+      return (hMM / label.heightMM) * 100;
     });
+
+    const elementGap = textElements.length > 1 ? 2 : 0; // 2% gap between elements
+    const totalNeeded = heights.reduce((sum, h) => sum + h, 0) + (textElements.length - 1) * elementGap;
+    
+    let useTightPacking = totalNeeded <= textZone.h;
+    
+    if (useTightPacking) {
+      let startY = textZone.y;
+      if (vAlign === 'center') {
+        startY = textZone.y + (textZone.h - totalNeeded) / 2;
+      } else if (vAlign === 'bottom') {
+        startY = textZone.y + textZone.h - totalNeeded;
+      }
+      
+      let currentY = startY;
+      textElements.forEach((el, idx) => {
+        const h = heights[idx];
+        positions.set(el.id, {
+          x: textZone.x,
+          y: currentY,
+          width: textZone.w,
+          height: h,
+          vAlign: 'center', // perfectly wrapped, so center inside its own box
+        });
+        currentY += h + elementGap;
+      });
+    } else {
+      // Fallback: distribute evenly if they don't fit
+      const lineH = textZone.h / textElements.length;
+      textElements.forEach((el, idx) => {
+        positions.set(el.id, {
+          x: textZone.x,
+          y: textZone.y + idx * lineH,
+          width: textZone.w,
+          height: lineH,
+          vAlign: vAlign,
+        });
+      });
+    }
   }
 
   // Layout image elements: stack inside imageZone
@@ -284,6 +343,7 @@ function renderTextElement(parent, element, label, containerW, containerH, autoP
   div.style.textAlign = element.textAlign;
   div.style.lineHeight = element.lineHeight;
   div.style.letterSpacing = `${element.letterSpacing}px`;
+  div.style.textTransform = element.textTransform || 'none';
   div.style.color = element.color;
 
   if (element.highlightColor && element.highlightColor !== 'transparent') {
@@ -518,8 +578,14 @@ function renderLabelToNode(label, widthPx, heightPx) {
   container.style.position = 'relative';
   container.style.overflow = 'hidden';
 
+  const scale = widthPx / (label.widthMM * PX_PER_MM);
+
   applyBackground(container, label.background);
-  applyBorder(container, label.border);
+  
+  if (label.border.enabled) {
+    container.style.border = `${label.border.width * scale}px ${label.border.style} ${label.border.color}`;
+    container.style.borderRadius = `${label.border.radius * scale}px`;
+  }
 
   // Compute auto-layout positions for print too
   const autoPositions = computeAutoLayout(label);
@@ -535,13 +601,13 @@ function renderLabelToNode(label, widthPx, heightPx) {
       div.style.width = `${pos?.width ?? element.width}%`;
       div.style.height = `${pos?.height ?? element.height}%`;
       div.style.fontFamily = fontFamilyCSS(element.fontFamily);
-      div.style.fontSize = `${element.fontSize}px`;
+      div.style.fontSize = `${element.fontSize * scale}px`;
       div.style.fontWeight = element.fontWeight;
       div.style.fontStyle = element.fontStyle;
       div.style.textDecoration = element.textDecoration;
       div.style.textAlign = element.textAlign;
       div.style.lineHeight = element.lineHeight;
-      div.style.letterSpacing = `${element.letterSpacing}px`;
+      div.style.letterSpacing = `${element.letterSpacing * scale}px`;
       div.style.color = element.color;
       div.style.whiteSpace = 'pre-wrap';
       div.style.wordBreak = 'break-word';
