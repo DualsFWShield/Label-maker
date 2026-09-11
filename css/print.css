@@ -1,0 +1,102 @@
+/* ===============================================================
+   Label Maker Studio — Print Stylesheet
+   Physically precise @page and @media print rules (mm/cm)
+   =============================================================== */
+
+@media print {
+  /* Hide everything except the print container */
+  body * {
+    visibility: hidden;
+  }
+
+  #print-output,
+  #print-output * {
+    visibility: visible;
+  }
+
+  #print-output {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+
+  /* Reset */
+  body {
+    margin: 0;
+    padding: 0;
+    background: white;
+    color: black;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Default A4 page */
+  @page {
+    size: A4;
+    margin: 5mm;
+  }
+
+  /* Each print-page fills exactly one physical page */
+  .print-page {
+    width: 200mm;  /* A4 width minus 2x5mm margins */
+    height: 287mm; /* A4 height minus 2x5mm margins */
+    position: relative;
+    page-break-after: always;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+
+  .print-page:last-child {
+    page-break-after: auto;
+  }
+
+  /* Each label cell is sized in mm by JS inline style */
+  .print-label-cell {
+    position: absolute;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+
+  /* Label content inside cells */
+  .print-label-cell .label-render {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Cut marks */
+  .cut-mark {
+    position: absolute;
+    border: 0;
+  }
+
+  .cut-mark-h {
+    height: 0;
+    border-top: 0.3mm dashed rgba(0, 0, 0, 0.3);
+  }
+
+  .cut-mark-v {
+    width: 0;
+    border-left: 0.3mm dashed rgba(0, 0, 0, 0.3);
+  }
+
+  /* Ensure images print */
+  img {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Hide UI controls during print */
+  .no-print,
+  #pwa-update-bar,
+  #toast-container {
+    display: none !important;
+  }
+}
+
+/* ===============================================================
+   Print page classes for different paper sizes
+   Set by JS via adding a <style> with @page overrides
+   =============================================================== */

@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Label Maker Studio — Create, customize, and print professional labels with physical precision. PWA with offline support.">
+  <meta name="theme-color" content="#1e1b4b">
+  <title>Label Maker Studio</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/print.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+  <style>
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- PWA Update Bar -->
+  <div id="pwa-update-bar">
+    <span>A new version is available!</span>
+    <button id="btn-apply-update">Update Now</button>
+  </div>
+
+  <!-- ===== Header ===== -->
+  <header id="app-header">
+    <div class="logo">
+      <img src="assets/icon-192.png" alt="Label Maker Studio" width="28" height="28">
+      <span>Label Maker</span>
+    </div>
+
+    <nav class="header-nav">
+      <button data-view="editor" class="active">
+        <i data-lucide="pen-tool"></i>
+        Editor
+      </button>
+      <button data-view="print">
+        <i data-lucide="printer"></i>
+        Print
+      </button>
+      <button data-view="import">
+        <i data-lucide="upload"></i>
+        Import
+      </button>
+    </nav>
+
+    <div class="header-actions">
+      <button id="btn-undo" class="btn btn-ghost btn-icon" title="Undo (Ctrl+Z)">
+        <i data-lucide="undo-2"></i>
+      </button>
+      <button id="btn-redo" class="btn btn-ghost btn-icon" title="Redo (Ctrl+Y)">
+        <i data-lucide="redo-2"></i>
+      </button>
+      <button id="btn-export-project" class="btn btn-ghost btn-sm" title="Export project">
+        <i data-lucide="download"></i> Export
+      </button>
+      <button id="btn-import-project" class="btn btn-ghost btn-sm" title="Import project">
+        <i data-lucide="folder-open"></i> Open
+      </button>
+      <button id="btn-install-pwa" class="btn btn-secondary btn-sm" style="display:none;" title="Install app">
+        <i data-lucide="smartphone"></i> Install
+      </button>
+      <button id="btn-force-update" class="btn btn-ghost btn-sm" title="Force update (clear cache)">
+        <i data-lucide="refresh-cw"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== Main Layout ===== -->
+  <main id="app-main">
+
+    <!-- ======================== VIEW: EDITOR ======================== -->
+    <div id="view-editor" class="active">
+
+      <!-- Left Sidebar: Properties -->
+      <aside id="sidebar">
+
+        <!-- Label Info -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-header">
+            <h3>Label</h3>
+            <i data-lucide="chevron-down"></i>
+          </div>
+          <div class="sidebar-section-content">
+            <div class="form-group">
+              <label for="label-name">Name</label>
+              <input type="text" id="label-name" placeholder="Label name">
+            </div>
+            <div class="form-group">
+              <label>Dimensions</label>
+              <div class="form-row">
+                <input type="number" id="label-width" min="5" max="2000" step="1" placeholder="W">
+                <span style="color: var(--text-muted)">×</span>
+                <input type="number" id="label-height" min="5" max="2000" step="1" placeholder="H">
+                <select id="label-unit" style="width: 70px; flex: 0 0 70px;">
+                  <option value="mm">mm</option>
+                  <option value="cm">cm</option>
+                  <option value="in">in</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Presets</label>
+              <div class="preset-chips">
+                <button class="preset-chip" data-preset="90x50" data-unit="mm">90×50 mm</button>
+                <button class="preset-chip" data-preset="70x40" data-unit="mm">70×40 mm</button>
+                <button class="preset-chip" data-preset="100x50" data-unit="mm">100×50 mm</button>
+                <button class="preset-chip" data-preset="50x30" data-unit="mm">50×30 mm</button>
+                <button class="preset-chip" data-preset="100x400" data-unit="mm">100×400 mm</button>
+                <button class="preset-chip" data-preset="210x297" data-unit="mm">A4 Full</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="label-copies">Copies</label>
+              <input type="number" id="label-copies" min="1" max="999" value="1">
+            </div>
+          </div>
+        </div>
+
+        <!-- Auto Layout -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-header">
+            <h3>Auto Layout</h3>
+            <i data-lucide="chevron-down"></i>
+          </div>
+          <div class="sidebar-section-content">
+            <div class="form-group">
+              <div class="toggle-wrapper">
+                <label class="toggle">
+                  <input type="checkbox" id="auto-layout-enabled" checked>
+                  <div class="toggle-track"></div>
+                </label>
+                <span style="font-size: 0.8rem; color: var(--text-secondary);">Auto-position elements</span>
+              </div>
+            </div>
+            <div id="auto-layout-options">
+              <div class="form-group">
+                <label for="auto-layout-img-position">Image Position</label>
+                <select id="auto-layout-img-position">
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                  <option value="top">Top</option>
+                  <option value="bottom">Bottom</option>
+                  <option value="none">None (text only)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="auto-layout-img-size">Image Size (<span id="auto-layout-img-size-val">30</span>%)</label>
+                <input type="range" id="auto-layout-img-size" min="10" max="60" step="5" value="30">
+              </div>
+              <div class="form-group">
+                <label for="auto-layout-padding">Padding (<span id="auto-layout-padding-val">8</span>%)</label>
+                <input type="range" id="auto-layout-padding" min="0" max="20" step="1" value="8">
+              </div>
+              <div class="form-group">
+                <label for="auto-layout-valign">Text Vertical Align</label>
+                <select id="auto-layout-valign">
+                  <option value="top">Top</option>
+                  <option value="center" selected>Center</option>
+                  <option value="bottom">Bottom</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Background -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-header">
+            <h3>Background</h3>
+            <i data-lucide="chevron-down"></i>
+          </div>
+          <div class="sidebar-section-content">
+            <div class="form-group">
+              <label for="bg-type">Type</label>
+              <select id="bg-type">
+                <option value="color">Solid Color</option>
+                <option value="gradient">Gradient</option>
+                <option value="image">Image</option>
+              </select>
+            </div>
+
+            <!-- Color -->
+            <div id="bg-color-section">
+              <div class="form-group">
+                <label for="bg-color">Color</label>
+                <input type="color" id="bg-color" value="#ffffff">
+              </div>
+            </div>
+
+            <!-- Gradient -->
+            <div id="bg-gradient-section" class="hidden">
+              <div class="form-group">
+                <label for="gradient-type">Gradient Type</label>
+                <select id="gradient-type">
+                  <option value="linear">Linear</option>
+                  <option value="radial">Radial</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="gradient-angle">Angle (°)</label>
+                <input type="number" id="gradient-angle" min="0" max="360" value="135">
+              </div>
+              <div class="form-group">
+                <label>Stops</label>
+                <div class="gradient-stops">
+                  <div class="gradient-stop-row">
+                    <input type="color" id="grad-stop1-color" value="#ffffff">
+                    <input type="number" id="grad-stop1-pos" min="0" max="100" value="0" placeholder="%">
+                    <span style="font-size: 0.75rem; color: var(--text-muted)">%</span>
+                  </div>
+                  <div class="gradient-stop-row">
+                    <input type="color" id="grad-stop2-color" value="#f0f0f0">
+                    <input type="number" id="grad-stop2-pos" min="0" max="100" value="100" placeholder="%">
+                    <span style="font-size: 0.75rem; color: var(--text-muted)">%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Image Background -->
+            <div id="bg-image-section" class="hidden">
+              <div class="form-group">
+                <label>Background Image</label>
+                <input type="file" id="bg-image-input" accept="image/*" style="font-size: 0.8rem;">
+              </div>
+              <div class="form-group">
+                <label for="bg-image-fit">Fit</label>
+                <select id="bg-image-fit">
+                  <option value="cover">Cover</option>
+                  <option value="contain">Contain</option>
+                  <option value="stretch">Stretch</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="bg-image-opacity">Opacity</label>
+                <input type="range" id="bg-image-opacity" min="0" max="1" step="0.05" value="1">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Border -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-header">
+            <h3>Border</h3>
+            <i data-lucide="chevron-down"></i>
+          </div>
+          <div class="sidebar-section-content">
+            <div class="form-group">
+              <div class="toggle-wrapper">
+                <label class="toggle">
+                  <input type="checkbox" id="border-enabled">
+                  <div class="toggle-track"></div>
+                </label>
+                <span style="font-size: 0.8rem; color: var(--text-secondary);">Enable border</span>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="border-width">Width</label>
+                <input type="number" id="border-width" min="0" max="20" value="1">
+              </div>
+              <div class="form-group">
+                <label for="border-style">Style</label>
+                <select id="border-style">
+                  <option value="solid">Solid</option>
+                  <option value="dashed">Dashed</option>
+                  <option value="dotted">Dotted</option>
+                  <option value="double">Double</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="border-color">Color</label>
+                <input type="color" id="border-color" value="#000000">
+              </div>
+              <div class="form-group">
+                <label for="border-radius">Radius</label>
+                <input type="number" id="border-radius" min="0" max="100" value="0">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Elements -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-header">
+            <h3>Elements</h3>
+            <i data-lucide="chevron-down"></i>
+          </div>
+          <div class="sidebar-section-content">
+            <div class="form-row" style="margin-bottom: 12px;">
+              <button id="btn-add-text" class="btn btn-secondary btn-sm" style="flex: 1;">
+                <i data-lucide="type"></i> Add Text
+              </button>
+              <button id="btn-add-image" class="btn btn-secondary btn-sm" style="flex: 1;">
+                <i data-lucide="image"></i> Add Image
+              </button>
+            </div>
+            <button id="btn-add-image-url" class="btn btn-ghost btn-sm" style="width: 100%; margin-bottom: 8px;">
+              <i data-lucide="link"></i> Image from URL
+            </button>
+            <div id="element-section" style="display: none;">
+              <button id="btn-delete-element" class="btn btn-danger btn-sm" style="width: 100%;">
+                <i data-lucide="trash-2"></i> Delete Element
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Typography (visible when text element selected) -->
+        <div class="sidebar-section" id="typography-section" style="display: none;">
+          <div class="sidebar-section-header">
+            <h3>Typography</h3>
+            <i data-lucide="chevron-down"></i>
+          </div>
+          <div class="sidebar-section-content">
+            <div class="form-group">
+              <label for="font-category">Category</label>
+              <select id="font-category">
+                <option value="">All</option>
+                <option value="sans-serif">Sans-serif</option>
+                <option value="serif">Serif</option>
+                <option value="display">Display</option>
+                <option value="handwriting">Handwriting</option>
+                <option value="monospace">Monospace</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="font-select">Font Family</label>
+              <select id="font-select"></select>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="font-size">Size (pt)</label>
+                <input type="number" id="font-size" min="6" max="200" value="16">
+              </div>
+              <div class="form-group">
+                <label for="text-align">Align</label>
+                <select id="text-align">
+                  <option value="left">Left</option>
+                  <option value="center">Center</option>
+                  <option value="right">Right</option>
+                  <option value="justify">Justify</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Style</label>
+              <div class="style-toggles">
+                <button id="btn-bold" class="style-toggle-btn" title="Bold"><b>B</b></button>
+                <button id="btn-italic" class="style-toggle-btn" title="Italic"><em>I</em></button>
+                <button id="btn-underline" class="style-toggle-btn" title="Underline"><u>U</u></button>
+                <button id="btn-strikethrough" class="style-toggle-btn" title="Strikethrough"><s>S</s></button>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="text-color">Text Color</label>
+                <input type="color" id="text-color" value="#000000">
+              </div>
+              <div class="form-group">
+                <label for="highlight-color">Highlight</label>
+                <input type="color" id="highlight-color" value="#ffffff">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="line-height">Line Height</label>
+                <input type="number" id="line-height" min="0.5" max="4" step="0.1" value="1.4">
+              </div>
+              <div class="form-group">
+                <label for="letter-spacing">Spacing</label>
+                <input type="number" id="letter-spacing" min="-5" max="20" step="0.5" value="0">
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </aside>
+
+      <!-- Canvas -->
+      <section id="canvas-area">
+        <div id="label-preview-container">
+          <div id="label-preview"></div>
+        </div>
+
+        <!-- Zoom controls -->
+        <div class="zoom-indicator">
+          <button id="btn-zoom-out" title="Zoom out"><i data-lucide="minus"></i></button>
+          <span id="zoom-display">100%</span>
+          <button id="btn-zoom-in" title="Zoom in"><i data-lucide="plus"></i></button>
+          <button id="btn-zoom-reset" title="Reset zoom" style="margin-left: 4px;"><i data-lucide="maximize-2"></i></button>
+        </div>
+      </section>
+
+      <!-- Right Panel: Labels List -->
+      <aside id="labels-panel">
+        <div class="labels-panel-header">
+          <div style="display: flex; align-items: center;">
+            <h2>Labels</h2>
+            <span class="badge" id="labels-count">0</span>
+          </div>
+          <button id="btn-add-label" class="btn btn-primary btn-icon" title="New label">
+            <i data-lucide="plus"></i>
+          </button>
+        </div>
+        <div class="labels-toolbar" style="padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 8px;">
+          <input type="search" id="labels-search" placeholder="Search labels..." style="width: 100%; padding: 6px 10px; font-size: 0.85rem; border-radius: 4px; border: 1px solid var(--border-subtle); background: rgba(0,0,0,0.2); color: var(--text-primary);">
+          
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <select id="labels-sort" style="font-size: 0.8rem; padding: 4px; flex: 1; margin-right: 8px;">
+              <option value="none">Sort: Custom</option>
+              <option value="name_asc">Name (A-Z)</option>
+              <option value="name_desc">Name (Z-A)</option>
+              <option value="size_asc">Size (Asc)</option>
+              <option value="size_desc">Size (Desc)</option>
+            </select>
+            <div style="display: flex; gap: 4px;">
+              <button id="btn-select-all" class="btn btn-icon" style="padding: 4px; width: 28px; height: 28px;" title="Select All"><i data-lucide="check-square" style="width: 16px; height: 16px;"></i></button>
+              <button id="btn-delete-selected" class="btn btn-icon" style="padding: 4px; width: 28px; height: 28px; color: #ef4444;" title="Delete Selected"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
+              <button id="btn-clear-labels" class="btn btn-icon" style="padding: 4px; width: 28px; height: 28px;" title="Clear All Labels"><i data-lucide="x-square" style="width: 16px; height: 16px;"></i></button>
+            </div>
+          </div>
+        </div>
+        <div id="labels-list"></div>
+      </aside>
+
+    </div>
+
+    <!-- ======================== VIEW: PRINT ======================== -->
+    <div id="view-print">
+
+      <!-- Print Settings Panel -->
+      <aside id="print-settings-panel">
+        <h2 style="font-size: 1rem; margin-bottom: 16px;">Print Settings</h2>
+
+        <div class="form-group">
+          <label for="print-page-format">Page Format</label>
+          <select id="print-page-format">
+            <option value="A4" selected>A4 (210 × 297 mm)</option>
+            <option value="A3">A3 (297 × 420 mm)</option>
+            <option value="Letter">US Letter (8.5 × 11 in)</option>
+            <option value="Legal">US Legal (8.5 × 14 in)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="print-orientation">Orientation</label>
+          <select id="print-orientation">
+            <option value="portrait">Portrait</option>
+            <option value="landscape">Landscape</option>
+            <option value="auto">Auto (best fit)</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="print-margin">Margin (mm)</label>
+            <input type="number" id="print-margin" min="0" max="30" value="5">
+          </div>
+          <div class="form-group">
+            <label for="print-gap">Gap (mm)</label>
+            <input type="number" id="print-gap" min="0" max="20" value="2">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="toggle-wrapper">
+            <label class="toggle">
+              <input type="checkbox" id="print-cut-marks" checked>
+              <div class="toggle-track"></div>
+            </label>
+            <span style="font-size: 0.8rem; color: var(--text-secondary);">Cut marks</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="toggle-wrapper">
+            <label class="toggle">
+              <input type="checkbox" id="print-single-label">
+              <div class="toggle-track"></div>
+            </label>
+            <span style="font-size: 0.8rem; color: var(--text-secondary);">One label per page</span>
+          </div>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid var(--border-subtle); margin: 16px 0;">
+
+        <!-- Print Summary -->
+        <div id="print-summary" style="margin-bottom: 16px;"></div>
+
+        <button id="btn-print" class="btn btn-primary" style="width: 100%; padding: 12px;">
+          <i data-lucide="printer"></i> Print Labels
+        </button>
+      </aside>
+
+      <!-- Print Preview -->
+      <div id="print-preview-area"></div>
+
+    </div>
+
+    <!-- ======================== VIEW: IMPORT ======================== -->
+    <div id="view-import">
+      <div id="import-panel">
+        <h2 style="font-size: 1.3rem; margin-bottom: 8px;">Import Labels</h2>
+        <p style="color: var(--text-muted); margin-bottom: 24px;">
+          Import labels from a file. Supported formats: CSV, XLSX, JSON, TXT.
+        </p>
+
+        <!-- Drop Zone -->
+        <div id="import-dropzone" class="import-dropzone">
+          <i data-lucide="upload-cloud"></i>
+          <h3>Drag & drop a file here</h3>
+          <p>or click to browse — CSV, XLSX, JSON, TXT</p>
+          <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls,.json,.txt" class="visually-hidden">
+        </div>
+
+        <!-- Template Downloads -->
+        <div class="templates-section">
+          <h3>Download Sample Templates</h3>
+          <p style="color: var(--text-muted); font-size: 0.82rem; margin-bottom: 14px;">
+            Download a pre-filled template file to see the expected format, then fill it with your own data and import it.
+          </p>
+          <div class="templates-grid">
+            <div class="template-card" data-download-template="csv">
+              <i data-lucide="file-text"></i>
+              <h4>CSV Template</h4>
+              <p>Comma-separated values</p>
+            </div>
+            <div class="template-card" data-download-template="xlsx">
+              <i data-lucide="file-spreadsheet"></i>
+              <h4>XLSX Template</h4>
+              <p>Microsoft Excel</p>
+            </div>
+            <div class="template-card" data-download-template="json">
+              <i data-lucide="file-json"></i>
+              <h4>JSON Template</h4>
+              <p>Structured data</p>
+            </div>
+            <div class="template-card" data-download-template="txt">
+              <i data-lucide="file-type"></i>
+              <h4>TXT Template</h4>
+              <p>Tab-delimited text</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+  <!-- Print output (populated dynamically, hidden until printing) -->
+  <div id="print-output"></div>
+
+  <!-- App Script -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
