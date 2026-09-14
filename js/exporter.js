@@ -44,7 +44,7 @@ export function exportLabelsToCSV() {
       t3.fontFamily || 'Arial', t3.fontSize || 12, t3.fontWeight === 'bold' ? 'true' : 'false', t3.fontStyle === 'italic' ? 'true' : 'false', t3.color || '#000000',
       label.background.type === 'color' ? label.background.color : '#ffffff',
       label.border?.enabled ? label.border.color : '',
-      img.src && !img.src.startsWith('data:') ? escapeCSV(img.src) : '',
+      img.src ? escapeCSV(img.src) : '',
       img.src ? 'true' : 'false'
     ];
 
@@ -84,9 +84,9 @@ export function exportLabelsToWord() {
           height: ${labelH}mm;
           border: 1px solid #ccc;
           padding: 2mm;
-          vertical-align: top;
+          vertical-align: middle;
         }
-        .text-line { margin: 2px 0; line-height: 1.2; }
+        .text-line { margin: 0; }
         .page-break { clear: both; page-break-after: always; }
       </style>
     </head>
@@ -113,17 +113,43 @@ export function exportLabelsToWord() {
       const rowLabels = rows[yKey].sort((a,b) => a.x - b.x); // sort left-to-right
       
       rowLabels.forEach(entry => {
-        html += `<td>`;
-        const texts = entry.label.elements.filter(el => el.type === 'text');
-        texts.sort((a, b) => a.y - b.y);
+        const lbl = entry.label;
+        const vAlign = lbl.autoLayout?.enabled ? (lbl.autoLayout.textVerticalAlign === 'center' ? 'middle' : lbl.autoLayout.textVerticalAlign) : 'top';
+        const padding = lbl.autoLayout?.enabled ? `${lbl.autoLayout.padding}%` : '2mm';
+        const bg = lbl.background?.type === 'color' ? `background-color: ${lbl.background.color};` : '';
+        let borderCSS = `border: none;`;
+        if (lbl.border?.enabled) {
+          borderCSS = `border: ${lbl.border.width}px ${lbl.border.style} ${lbl.border.color};`;
+        } else if (state.printSettings.showCutLines) {
+          borderCSS = `border: 1px dashed #999;`;
+        }
+        
+        html += `<td style="vertical-align: ${vAlign}; padding: ${padding}; ${bg} ${borderCSS}">`;
+        
+        const els = [...lbl.elements].sort((a, b) => a.y - b.y);
 
-        texts.forEach(t => {
-          const fontWeight = t.fontWeight === 'bold' ? 'bold' : 'normal';
-          const fontStyle = t.fontStyle === 'italic' ? 'italic' : 'normal';
-          const textTransform = t.textTransform && t.textTransform !== 'none' ? `text-transform: ${t.textTransform};` : '';
-          html += `<p class="text-line" style="font-family: '${t.fontFamily}'; font-size: ${t.fontSize}pt; color: ${t.color}; font-weight: ${fontWeight}; font-style: ${fontStyle}; text-align: ${t.textAlign}; ${textTransform}">
-            ${escapeHTML(t.content || '')}
-          </p>`;
+        const gap = lbl.autoLayout?.enabled ? lbl.autoLayout.gap : 2;
+
+        els.forEach((t, index) => {
+          const marginBottom = index < els.length - 1 ? `${gap}%` : '0';
+          
+          if (t.type === 'text') {
+            const fontWeight = t.fontWeight === 'bold' ? 'bold' : 'normal';
+            const fontStyle = t.fontStyle === 'italic' ? 'italic' : 'normal';
+            const textTransform = t.textTransform && t.textTransform !== 'none' ? `text-transform: ${t.textTransform};` : '';
+            
+            // Replace \n with <br> for Word
+            const content = escapeHTML(t.content || '').replace(/\n/g, '<br>');
+
+            html += `<p class="text-line" align="${t.textAlign}" style="font-family: '${t.fontFamily}', sans-serif; font-size: ${t.fontSize}pt; color: ${t.color}; font-weight: ${fontWeight}; font-style: ${fontStyle}; text-align: ${t.textAlign}; ${textTransform} line-height: ${t.lineHeight || 1.2}; margin-bottom: ${marginBottom};">
+              ${content}
+            </p>`;
+          } else if (t.type === 'image' && t.src) {
+            const width = lbl.autoLayout?.enabled ? `${lbl.autoLayout.imageSizePercent || 30}%` : `${t.width}%`;
+            html += `<div style="text-align: center; margin-bottom: ${marginBottom};">
+              <img src="${t.src}" style="width: ${width}; max-width: 100%; opacity: ${t.opacity || 1};" />
+            </div>`;
+          }
         });
         html += `</td>`;
       });

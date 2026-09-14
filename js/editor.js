@@ -107,7 +107,7 @@ function computeAutoLayout(label) {
       return (hMM / label.heightMM) * 100;
     });
 
-    const elementGap = textElements.length > 1 ? 2 : 0; // 2% gap between elements
+    const elementGap = textElements.length > 1 ? (layout.gap ?? 2) : 0; // Configurable % gap between elements
     const totalNeeded = heights.reduce((sum, h) => sum + h, 0) + (textElements.length - 1) * elementGap;
     
     let useTightPacking = totalNeeded <= textZone.h;
@@ -232,6 +232,23 @@ function handleKeyboard(e) {
     if (e.key === 'ArrowRight') updates.x = Math.min(100 - el.width, el.x + step);
     updateElement(label.id, el.id, updates);
   }
+
+  // Text formatting shortcuts (Word classic)
+  if ((e.ctrlKey || e.metaKey) && state.activeElementId) {
+    const el = getActiveElement();
+    if (el && el.type === 'text') {
+      if (e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        updateElement(label.id, el.id, { fontWeight: el.fontWeight === 'bold' ? 'normal' : 'bold' });
+      } else if (e.key.toLowerCase() === 'i') {
+        e.preventDefault();
+        updateElement(label.id, el.id, { fontStyle: el.fontStyle === 'italic' ? 'normal' : 'italic' });
+      } else if (e.key.toLowerCase() === 'u') {
+        e.preventDefault();
+        updateElement(label.id, el.id, { textDecoration: el.textDecoration === 'underline' ? 'none' : 'underline' });
+      }
+    }
+  }
 }
 
 /* ---------- Render Label Preview ---------- */
@@ -261,14 +278,31 @@ function renderPreview() {
   // Compute auto-layout positions
   const autoPositions = computeAutoLayout(label);
 
-  // Render elements
-  previewEl.innerHTML = '';
+  // Render elements using DOM Diffing
+  const existingNodes = new Map();
+  for (const node of previewEl.children) {
+    if (node.dataset.elementId) {
+      existingNodes.set(node.dataset.elementId, node);
+    }
+  }
+
+  const currentElementIds = new Set();
 
   for (const element of label.elements) {
+    currentElementIds.add(element.id);
+    const existingNode = existingNodes.get(element.id);
+    
     if (element.type === 'text') {
-      renderTextElement(previewEl, element, label, widthPx, heightPx, autoPositions);
+      updateOrCreateTextElement(previewEl, existingNode, element, label, widthPx, heightPx, autoPositions);
     } else if (element.type === 'image') {
-      renderImageElement(previewEl, element, label, widthPx, heightPx, autoPositions);
+      updateOrCreateImageElement(previewEl, existingNode, element, label, widthPx, heightPx, autoPositions);
+    }
+  }
+
+  // Remove stale nodes
+  for (const [id, node] of existingNodes.entries()) {
+    if (!currentElementIds.has(id)) {
+      node.remove();
     }
   }
 }
@@ -314,9 +348,9 @@ function applyBorder(el, border) {
 
 /* ---------- Render Text Element ---------- */
 
-function renderTextElement(parent, element, label, containerW, containerH, autoPositions = null) {
-  const div = document.createElement('div');
-  div.className = 'label-text-element' + (state.activeElementId === element.id ? ' selected' : '');
+function updateOrCreateTextElement(parent, existingDiv, element, label, containerW, containerH, autoPositions = null) {
+  const div = existingDiv || document.createElement('div');
+  div.className = 'label-text-element' + (state.activeElementIds.has(element.id) ? ' selected' : '');
   div.dataset.elementId = element.id;
 
   // Position: use auto-layout if available, else stored values
@@ -350,25 +384,29 @@ function renderTextElement(parent, element, label, containerW, containerH, autoP
     div.style.backgroundColor = element.highlightColor;
   }
 
-  div.textContent = element.content;
-
-  // Interaction
-  div.addEventListener('mousedown', (e) => handleElementMouseDown(e, element, label));
-  div.addEventListener('dblclick', (e) => handleTextDoubleClick(e, div, element, label));
-
-  // Resize handles (only if NOT auto-layout)
-  if (state.activeElementId === element.id && !pos) {
-    appendResizeHandles(div, element, label);
+  if (div.contentEditable !== 'true') {
+    div.textContent = element.content;
   }
 
-  parent.appendChild(div);
+  // Interaction
+  if (!existingDiv) {
+    div.addEventListener('mousedown', (e) => handleElementMouseDown(e, element.id, label.id));
+    div.addEventListener('dblclick', (e) => handleTextDoubleClick(e, div, element.id, label.id));
+    parent.appendChild(div);
+  }
+
+  // Resize handles
+  div.querySelectorAll('.resize-handle').forEach(h => h.remove());
+  if (state.activeElementIds.has(element.id) && !pos && div.contentEditable !== 'true') {
+    appendResizeHandles(div, element, label);
+  }
 }
 
 /* ---------- Render Image Element ---------- */
 
-function renderImageElement(parent, element, label, containerW, containerH, autoPositions = null) {
-  const div = document.createElement('div');
-  div.className = 'label-image-element' + (state.activeElementId === element.id ? ' selected' : '');
+function updateOrCreateImageElement(parent, existingDiv, element, label, containerW, containerH, autoPositions = null) {
+  const div = existingDiv || document.createElement('div');
+  div.className = 'label-image-element' + (state.activeElementIds.has(element.id) ? ' selected' : '');
   div.dataset.elementId = element.id;
 
   // Position: use auto-layout if available
@@ -390,14 +428,16 @@ function renderImageElement(parent, element, label, containerW, containerH, auto
     div.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(124,58,237,0.1);border-radius:4px;font-size:11px;color:#a78bfa;">No image</div>`;
   }
 
-  div.addEventListener('mousedown', (e) => handleElementMouseDown(e, element, label));
-
-  // Resize handles only if NOT auto-layout
-  if (state.activeElementId === element.id && !pos) {
-    appendResizeHandles(div, element, label);
+  if (!existingDiv) {
+    div.addEventListener('mousedown', (e) => handleElementMouseDown(e, element.id, label.id));
+    parent.appendChild(div);
   }
 
-  parent.appendChild(div);
+  // Resize handles
+  div.querySelectorAll('.resize-handle').forEach(h => h.remove());
+  if (state.activeElementIds.has(element.id) && !pos) {
+    appendResizeHandles(div, element, label);
+  }
 }
 
 /* ---------- Resize Handles ---------- */
@@ -408,7 +448,7 @@ function appendResizeHandles(parentDiv, element, label) {
     handle.className = `resize-handle ${corner}`;
     handle.addEventListener('mousedown', (e) => {
       e.stopPropagation();
-      startResize(e, element, label, corner);
+      startResize(e, element.id, label.id, corner);
     });
     parentDiv.appendChild(handle);
   });
@@ -416,15 +456,21 @@ function appendResizeHandles(parentDiv, element, label) {
 
 /* ---------- Drag & Drop ---------- */
 
-function handleElementMouseDown(e, element, label) {
+function handleElementMouseDown(e, elementId, labelId) {
   if (e.button !== 0) return;
   e.stopPropagation();
 
-  setActiveElement(element.id);
+  setActiveElement(elementId, e.shiftKey || e.ctrlKey || e.metaKey);
+
+  const label = state.labels.find(l => l.id === labelId);
+  const element = label?.elements.find(el => el.id === elementId);
+  if (!label || !element) return;
 
   // Start drag
   const rect = previewEl.getBoundingClientRect();
+  const node = previewEl.querySelector(`[data-element-id="${elementId}"]`);
   _dragState = {
+    node,
     elementId: element.id,
     labelId: label.id,
     startMouseX: e.clientX,
@@ -447,10 +493,21 @@ function handleDragMove(e) {
   const newX = Math.max(0, Math.min(95, _dragState.startX + dx));
   const newY = Math.max(0, Math.min(95, _dragState.startY + dy));
 
-  updateElement(_dragState.labelId, _dragState.elementId, { x: newX, y: newY });
+  _dragState.currentX = newX;
+  _dragState.currentY = newY;
+  
+  if (_dragState.node) {
+    _dragState.node.style.left = `${newX}%`;
+    _dragState.node.style.top = `${newY}%`;
+  }
 }
 
 function handleDragEnd() {
+  if (!_dragState) return;
+  if (_dragState.currentX !== undefined) {
+    updateElement(_dragState.labelId, _dragState.elementId, { x: _dragState.currentX, y: _dragState.currentY });
+  }
+  
   _dragState = null;
   document.removeEventListener('mousemove', handleDragMove);
   document.removeEventListener('mouseup', handleDragEnd);
@@ -458,9 +515,15 @@ function handleDragEnd() {
 
 /* ---------- Resize ---------- */
 
-function startResize(e, element, label, corner) {
+function startResize(e, elementId, labelId, corner) {
+  const label = state.labels.find(l => l.id === labelId);
+  const element = label?.elements.find(el => el.id === elementId);
+  if (!label || !element) return;
+
   const rect = previewEl.getBoundingClientRect();
+  const node = previewEl.querySelector(`[data-element-id="${elementId}"]`);
   _resizeState = {
+    node,
     elementId: element.id,
     labelId: label.id,
     corner,
@@ -501,10 +564,22 @@ function handleResizeMove(e) {
     updates.height = Math.max(5, s.startH - dy);
   }
 
-  updateElement(s.labelId, s.elementId, updates);
+  s.updates = updates;
+  
+  if (s.node) {
+    if (updates.x !== undefined) s.node.style.left = `${updates.x}%`;
+    if (updates.y !== undefined) s.node.style.top = `${updates.y}%`;
+    if (updates.width !== undefined) s.node.style.width = `${updates.width}%`;
+    if (updates.height !== undefined) s.node.style.height = `${updates.height}%`;
+  }
 }
 
 function handleResizeEnd() {
+  if (!_resizeState) return;
+  if (_resizeState.updates) {
+    updateElement(_resizeState.labelId, _resizeState.elementId, _resizeState.updates);
+  }
+  
   _resizeState = null;
   document.removeEventListener('mousemove', handleResizeMove);
   document.removeEventListener('mouseup', handleResizeEnd);
@@ -512,8 +587,13 @@ function handleResizeEnd() {
 
 /* ---------- Inline Text Editing ---------- */
 
-function handleTextDoubleClick(e, div, element, label) {
+function handleTextDoubleClick(e, div, elementId, labelId) {
   e.stopPropagation();
+  
+  const label = state.labels.find(l => l.id === labelId);
+  const element = label?.elements.find(el => el.id === elementId);
+  if (!label || !element) return;
+  
   div.contentEditable = 'true';
   div.focus();
 
@@ -540,6 +620,22 @@ function handleTextDoubleClick(e, div, element, label) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       finishEdit();
+    }
+    // Prevent default browser rich-text formatting, apply to whole element instead
+    if (e.ctrlKey || e.metaKey) {
+      if (e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        element.fontWeight = element.fontWeight === 'bold' ? 'normal' : 'bold';
+        div.style.fontWeight = element.fontWeight;
+      } else if (e.key.toLowerCase() === 'i') {
+        e.preventDefault();
+        element.fontStyle = element.fontStyle === 'italic' ? 'normal' : 'italic';
+        div.style.fontStyle = element.fontStyle;
+      } else if (e.key.toLowerCase() === 'u') {
+        e.preventDefault();
+        element.textDecoration = element.textDecoration === 'underline' ? 'none' : 'underline';
+        div.style.textDecoration = element.textDecoration;
+      }
     }
   };
 
@@ -608,6 +704,7 @@ function renderLabelToNode(label, widthPx, heightPx) {
       div.style.textAlign = element.textAlign;
       div.style.lineHeight = element.lineHeight;
       div.style.letterSpacing = `${element.letterSpacing * scale}px`;
+      div.style.textTransform = element.textTransform || 'none';
       div.style.color = element.color;
       div.style.whiteSpace = 'pre-wrap';
       div.style.wordBreak = 'break-word';

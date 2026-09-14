@@ -6,7 +6,7 @@
 import {
   state, subscribe, setView, setZoom,
   addLabel, duplicateLabel, removeLabel,
-  setActiveLabel, setActiveElement, getActiveLabel, getActiveElement,
+  setActiveLabel, setActiveElement, getActiveLabel, getActiveElement, getActiveElements,
   updateLabel, batchUpdateLabels, updateElement, addElement, removeElement,
   updatePrintSettings, restoreState,
   exportProject, importProject,
@@ -417,9 +417,11 @@ function setupAutoLayoutControls() {
   const imgPosition = document.getElementById('auto-layout-img-position');
   const imgSize = document.getElementById('auto-layout-img-size');
   const padding = document.getElementById('auto-layout-padding');
+  const gap = document.getElementById('auto-layout-gap');
   const vAlign = document.getElementById('auto-layout-valign');
   const imgSizeVal = document.getElementById('auto-layout-img-size-val');
   const paddingVal = document.getElementById('auto-layout-padding-val');
+  const gapVal = document.getElementById('auto-layout-gap-val');
 
   enabledToggle?.addEventListener('change', () => {
     const label = getActiveLabel();
@@ -451,6 +453,15 @@ function setupAutoLayoutControls() {
     const label = getActiveLabel();
     if (label) {
       const autoLayout = { ...label.autoLayout, padding: parseInt(padding.value) };
+      updateLabel(label.id, { autoLayout });
+    }
+  });
+
+  gap?.addEventListener('input', () => {
+    if (gapVal) gapVal.textContent = gap.value;
+    const label = getActiveLabel();
+    if (label) {
+      const autoLayout = { ...label.autoLayout, gap: parseInt(gap.value) };
       updateLabel(label.id, { autoLayout });
     }
   });
@@ -595,11 +606,36 @@ function setupTypographyControls() {
   const letterSpacing = document.getElementById('letter-spacing');
 
   textContent?.addEventListener('input', () => {
-    const el = getActiveElement();
+    const els = getActiveElements().filter(el => el.type === 'text');
     const label = getActiveLabel();
-    if (el && label && el.type === 'text') {
-      updateElement(label.id, el.id, { content: textContent.value });
+    if (els.length === 1 && label) {
+      updateElement(label.id, els[0].id, { content: textContent.value });
     }
+  });
+
+  const btnMergeText = document.getElementById('btn-merge-text');
+  btnMergeText?.addEventListener('click', () => {
+    const textElements = getActiveElements().filter(el => el.type === 'text');
+    if (textElements.length < 2) return;
+    
+    // Sort vertically based on Y coordinate
+    textElements.sort((a, b) => a.y - b.y);
+    
+    const first = textElements[0];
+    const rest = textElements.slice(1);
+    
+    let newContent = first.content;
+    for (const el of rest) {
+      newContent += '\n' + el.content;
+    }
+    
+    // Perform updates
+    updateElement(state.activeLabelId, first.id, { content: newContent });
+    for (const el of rest) {
+      removeElement(state.activeLabelId, el.id);
+    }
+    
+    setActiveElement(first.id);
   });
 
   // Populate font selector
@@ -831,12 +867,15 @@ function updateSidebarUI() {
   setInputValue('auto-layout-img-position', label.autoLayout?.imagePosition ?? 'left');
   setInputValue('auto-layout-img-size', label.autoLayout?.imageSizePercent ?? 30);
   setInputValue('auto-layout-padding', label.autoLayout?.padding ?? 8);
+  setInputValue('auto-layout-gap', label.autoLayout?.gap ?? 2);
   setInputValue('auto-layout-valign', label.autoLayout?.textVerticalAlign ?? 'center');
   
   const imgSizeVal = document.getElementById('auto-layout-img-size-val');
   if (imgSizeVal) imgSizeVal.textContent = label.autoLayout?.imageSizePercent ?? 30;
   const paddingVal = document.getElementById('auto-layout-padding-val');
   if (paddingVal) paddingVal.textContent = label.autoLayout?.padding ?? 8;
+  const gapVal = document.getElementById('auto-layout-gap-val');
+  if (gapVal) gapVal.textContent = label.autoLayout?.gap ?? 2;
 
   // Background
   setInputValue('bg-type', label.background.type);
@@ -861,16 +900,38 @@ function updateSidebarUI() {
   setInputValue('border-width', label.border.width);
   setInputValue('border-style', label.border.style);
   setInputValue('border-color', label.border.color);
-  setInputValue('border-radius', label.border.radius);  // Element properties
+  setInputValue('border-radius', label.border.radius);
+  
+  // Element properties
   const typoSection = document.getElementById('typography-section');
   const imageSection = document.getElementById('image-section');
   const elementSection = document.getElementById('element-section');
 
-  if (typoSection) typoSection.style.display = 'none';
-  if (imageSection) imageSection.style.display = 'none';
+  // Multi-select support
+  const activeElements = state.activeElementIds.size > 0 ? getActiveElements() : [];
+  
+  const hasText = activeElements.some(el => el.type === 'text');
+  const hasImage = activeElements.some(el => el.type === 'image');
 
-  if (element && element.type === 'text') {
-    if (typoSection) typoSection.style.display = '';
+  if (typoSection) typoSection.style.display = hasText ? '' : 'none';
+  if (imageSection) imageSection.style.display = hasImage ? '' : 'none';
+  if (elementSection) elementSection.style.display = activeElements.length > 0 ? '' : 'none';
+
+  const btnMergeText = document.getElementById('btn-merge-text');
+  const textContentGroup = document.getElementById('text-content-group');
+  if (btnMergeText && textContentGroup) {
+    const textElements = activeElements.filter(el => el.type === 'text');
+    if (textElements.length > 1) {
+      btnMergeText.style.display = '';
+      textContentGroup.style.display = 'none';
+    } else {
+      btnMergeText.style.display = 'none';
+      textContentGroup.style.display = '';
+    }
+  }
+
+  // Populate fields based on the first selected element
+  if (hasText) {
     setInputValue('text-content', element.content || '');
     setInputValue('font-select', element.fontFamily);
     setInputValue('font-size', element.fontSize);
@@ -886,25 +947,24 @@ function updateSidebarUI() {
     toggleActiveClass('btn-italic', element.fontStyle === 'italic');
     toggleActiveClass('btn-underline', element.textDecoration?.includes('underline'));
     toggleActiveClass('btn-strikethrough', element.textDecoration?.includes('line-through'));
-  } else if (element && element.type === 'image') {
-    if (imageSection) imageSection.style.display = '';
+  } 
+  if (hasImage && element.type === 'image') {
     setInputValue('img-url-input', element.src || '');
-  }
-
-  if (elementSection) {
-    elementSection.style.display = element ? '' : 'none';
   }
 
   // Image element controls
   const imageControls = document.getElementById('image-element-controls');
   if (imageControls) {
-    imageControls.style.display = (element && element.type === 'image') ? '' : 'none';
+    imageControls.style.display = hasImage ? '' : 'none';
   }
 }
 
 function setInputValue(id, value) {
   const el = document.getElementById(id);
-  if (el && el.value !== String(value)) el.value = value;
+  // Do not overwrite the value if the user is currently interacting with this element (e.g. dragging a slider)
+  if (el && el.value !== String(value) && document.activeElement !== el) {
+    el.value = value;
+  }
 }
 
 function toggleActiveClass(id, isActive) {
@@ -959,8 +1019,6 @@ function updateLabelsPanelUI() {
   const badge = document.getElementById('labels-count');
   if (badge) badge.textContent = state.labels.length;
 
-  listEl.innerHTML = '';
-
   const filteredLabels = getSortedFilteredLabels();
 
   if (filteredLabels.length === 0) {
@@ -974,16 +1032,45 @@ function updateLabelsPanelUI() {
     return;
   }
 
+  const existingCards = new Map();
+  for (const card of listEl.querySelectorAll('.label-card')) {
+    existingCards.set(card.dataset.labelId, card);
+  }
+
+  const currentLabelIds = new Set();
+
   for (const label of filteredLabels) {
+    currentLabelIds.add(label.id);
     const isSelected = state.selectedLabelIds.has(label.id);
     const isActive = state.activeLabelId === label.id;
-    const card = document.createElement('div');
-    card.className = `label-card ${isActive ? 'active' : ''} ${isSelected ? 'selected' : ''}`;
-    card.dataset.labelId = label.id;
-    if (isSelected) card.style.borderLeft = '3px solid var(--accent-primary)';
-
     const unit = label.unit === 'cm' ? 'cm' : label.unit === 'in' ? 'in' : 'mm';
-    card.innerHTML = `
+    
+    let card = existingCards.get(label.id);
+    
+    if (!card) {
+      card = document.createElement('div');
+      card.dataset.labelId = label.id;
+      
+      // Toggle selection on checkbox click
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.label-card-actions') || e.target.closest('input')) return;
+        if (e.ctrlKey || e.metaKey) {
+          toggleLabelSelection(label.id);
+        } else {
+          setActiveLabel(label.id);
+        }
+      });
+    }
+
+    // Update state
+    card.className = `label-card ${isActive ? 'active' : ''} ${isSelected ? 'selected' : ''}`;
+    card.style.borderLeft = isSelected ? '3px solid var(--accent-primary)' : '';
+    
+    // Check if content needs updating (to avoid destroying Lucide icons if not necessary)
+    const hasImage = label.elements.some(el => el.type === 'image');
+    const imageIcon = hasImage ? '<i data-lucide="image" style="width: 14px; height: 14px; color: var(--text-secondary);" title="Contains Image"></i>' : '';
+    
+    const newInnerHTML = `
       <div class="label-card-checkbox" style="display: flex; align-items: center; justify-content: center; padding: 0 8px;">
         <input type="checkbox" ${isSelected ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;">
       </div>
@@ -991,7 +1078,7 @@ function updateLabelsPanelUI() {
       <div class="label-card-info" style="flex: 1; min-width: 0;">
         <h4 style="display: flex; align-items: center; gap: 6px;">
           ${escapeHtml(label.name)}
-          ${label.elements.some(el => el.type === 'image') ? '<i data-lucide="image" style="width: 14px; height: 14px; color: var(--text-secondary);" title="Contains Image"></i>' : ''}
+          ${imageIcon}
         </h4>
         <span>${label.widthMM}×${label.heightMM} ${unit} · ×${label.copies ?? 1}</span>
       </div>
@@ -1000,29 +1087,36 @@ function updateLabelsPanelUI() {
       </div>
     `;
 
-    // Toggle selection on checkbox click
-    card.querySelector('input[type="checkbox"]').addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleLabelSelection(label.id);
-    });
-
-    card.addEventListener('click', (e) => {
-      if (e.target.closest('.label-card-actions') || e.target.closest('input')) return;
-      // If ctrl/cmd is pressed, toggle selection, otherwise standard active
-      if (e.ctrlKey || e.metaKey) {
+    // Only update innerHTML if it's new, otherwise we lose event listeners on buttons inside
+    // Wait, since innerHTML destroys child nodes, we must reattach button events if we rewrite it.
+    // To be perfectly optimized and keep events, we can just update specific parts, but replacing innerHTML is easier if we delegate events.
+    if (!existingCards.has(label.id) || card._lastHtml !== newInnerHTML) {
+      card.innerHTML = newInnerHTML;
+      card._lastHtml = newInnerHTML;
+      
+      card.querySelector('input[type="checkbox"]').addEventListener('click', (e) => {
+        e.stopPropagation();
         toggleLabelSelection(label.id);
-      } else {
-        setActiveLabel(label.id);
-      }
-    });
-
-    card.querySelector('.duplicate-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      duplicateLabel(label.id);
-      showToast('Label duplicated', 'success');
-    });
+      });
+      
+      card.querySelector('.duplicate-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        duplicateLabel(label.id);
+        showToast('Label duplicated', 'success');
+      });
+    } else {
+      // Just update dynamic properties that change frequently without rewriting HTML
+      card.querySelector('input[type="checkbox"]').checked = isSelected;
+    }
 
     listEl.appendChild(card);
+  }
+
+  // Remove stale cards
+  for (const [id, card] of existingCards.entries()) {
+    if (!currentLabelIds.has(id)) {
+      card.remove();
+    }
   }
 
   if (window.lucide) window.lucide.createIcons({ nodes: listEl.querySelectorAll('[data-lucide]') });

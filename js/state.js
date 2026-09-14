@@ -3,7 +3,7 @@
  * Manages labels collection, current selection, undo/redo, and auto-persistence
  */
 
-import { saveAutoState, loadAutoState } from './db.js';
+import { dbGet, dbPut, STORES, saveImage, loadImage, saveAutoState, loadAutoState, dbGetAll, deleteImage } from './db.js';
 
 /* ---------- Default Structures ---------- */
 
@@ -85,6 +85,7 @@ function createDefaultLabel(overrides = {}) {
       imagePosition: 'left',  // left | right | top | bottom | none
       imageSizePercent: 30,    // % of label width/height allocated to images
       padding: 8,             // % padding inside label
+      gap: 2,                 // % gap between elements
       textVerticalAlign: 'center', // top | center | bottom
     },
     copies: 1,
@@ -97,7 +98,7 @@ function createDefaultLabel(overrides = {}) {
 const state = {
   labels: [],
   activeLabelId: null,
-  activeElementId: null,
+  activeElementIds: new Set(),
   printSettings: {
     pageFormat: 'A4',
     orientation: 'portrait',
@@ -124,13 +125,18 @@ function _snapshotLabels() {
   return JSON.parse(JSON.stringify(state.labels));
 }
 
+let _historyDebounce = null;
 function pushHistory() {
   if (_skipHistoryPush) return;
-  // Trim future
-  _history = _history.slice(0, _historyIndex + 1);
-  _history.push(_snapshotLabels());
-  if (_history.length > MAX_HISTORY) _history.shift();
-  _historyIndex = _history.length - 1;
+  
+  clearTimeout(_historyDebounce);
+  _historyDebounce = setTimeout(() => {
+    // Trim future
+    _history = _history.slice(0, _historyIndex + 1);
+    _history.push(_snapshotLabels());
+    if (_history.length > MAX_HISTORY) _history.shift();
+    _historyIndex = _history.length - 1;
+  }, 300);
 }
 
 function undo() {
@@ -164,10 +170,14 @@ function subscribe(fn) {
   return () => _subscribers.delete(fn);
 }
 
+let _notifyFrame = null;
 function _notifyAll() {
-  for (const fn of _subscribers) {
-    try { fn(state); } catch (e) { console.error('State subscriber error:', e); }
-  }
+  if (_notifyFrame) cancelAnimationFrame(_notifyFrame);
+  _notifyFrame = requestAnimationFrame(() => {
+    for (const fn of _subscribers) {
+      try { fn(state); } catch (e) { console.error('State subscriber error:', e); }
+    }
+  });
 }
 
 /* ---------- Auto-save (debounced) ---------- */
@@ -207,7 +217,10 @@ function addLabel(overrides = {}) {
   const label = createDefaultLabel(overrides);
   state.labels.push(label);
   state.activeLabelId = label.id;
-  state.activeElementId = label.elements[0]?.id ?? null;
+  state.activeElementIds.clear();
+  if (label.elements[0]) {
+    state.activeElementIds.add(label.elements[0].id);
+  }
   pushHistory();
   _notifyAll();
   _scheduleSave();
@@ -241,13 +254,13 @@ function removeLabel(labelId) {
   pushHistory();
   _notifyAll();
   _scheduleSave();
+  gcImages();
 }
 
 function deleteAllLabels() {
   state.labels = [];
   state.selectedLabelIds.clear();
-  state.activeLabelId = null;
-  state.activeElementId = null;
+  state.activeElementIds.clear();
   pushHistory();
   _notifyAll();
   _scheduleSave();
@@ -264,11 +277,12 @@ function deleteSelectedLabels() {
   pushHistory();
   _notifyAll();
   _scheduleSave();
+  gcImages();
 }
 
 function setActiveLabel(labelId) {
   state.activeLabelId = labelId;
-  state.activeElementId = null;
+  state.activeElementIds.clear();
   
   // If we select a label, we should probably ensure it is part of the selection,
   // or clear selection and select just this one. For now, just add it to selection if it's the only action.
@@ -290,7 +304,7 @@ function toggleLabelSelection(labelId) {
   // Update active label to the last selected if active is not in selection
   if (state.selectedLabelIds.size > 0 && !state.selectedLabelIds.has(state.activeLabelId)) {
     state.activeLabelId = Array.from(state.selectedLabelIds).pop();
-    state.activeElementId = null;
+    state.activeElementIds.clear();
   }
   _notifyAll();
 }
@@ -336,8 +350,17 @@ function getSortedFilteredLabels() {
   return result;
 }
 
-function setActiveElement(elementId) {
-  state.activeElementId = elementId;
+function setActiveElement(elementId, multi = false) {
+  if (!multi) {
+    state.activeElementIds.clear();
+  }
+  if (elementId) {
+    if (state.activeElementIds.has(elementId)) {
+      if (multi) state.activeElementIds.delete(elementId);
+    } else {
+      state.activeElementIds.add(elementId);
+    }
+  }
   _notifyAll();
 }
 
@@ -347,8 +370,29 @@ function getActiveLabel() {
 
 function getActiveElement() {
   const label = getActiveLabel();
-  if (!label) return null;
-  return label.elements.find((el) => el.id === state.activeElementId) ?? null;
+  if (!label || state.activeElementIds.size === 0) return null;
+  const firstId = state.activeElementIds.values().next().value;
+  return label.elements.find((el) => el.id === firstId) ?? null;
+}
+
+function getActiveElements() {
+  const label = getActiveLabel();
+  if (!label || state.activeElementIds.size === 0) return [];
+  return label.elements.filter((el) => state.activeElementIds.has(el.id));
+}
+
+function updateActiveElements(updates) {
+  const label = getActiveLabel();
+  if (!label) return;
+  for (const elId of state.activeElementIds) {
+    const el = label.elements.find(e => e.id === elId);
+    if (el) {
+      Object.assign(el, updates);
+    }
+  }
+  pushHistory();
+  _notifyAll();
+  _scheduleSave();
 }
 
 function updateLabel(labelId, updates) {
@@ -427,7 +471,8 @@ function addElement(labelId, elementType = 'text', overrides = {}) {
     ? createDefaultImageElement(overrides)
     : createDefaultTextElement(overrides);
   label.elements.push(element);
-  state.activeElementId = element.id;
+  state.activeElementIds.clear();
+  state.activeElementIds.add(element.id);
   pushHistory();
   _notifyAll();
   _scheduleSave();
@@ -440,12 +485,13 @@ function removeElement(labelId, elementId) {
   const idx = label.elements.findIndex((el) => el.id === elementId);
   if (idx === -1) return;
   label.elements.splice(idx, 1);
-  if (state.activeElementId === elementId) {
-    state.activeElementId = null;
+  if (state.activeElementIds.has(elementId)) {
+    state.activeElementIds.delete(elementId);
   }
   pushHistory();
   _notifyAll();
   _scheduleSave();
+  gcImages();
 }
 
 function updatePrintSettings(updates) {
@@ -491,13 +537,14 @@ function importProject(jsonString) {
     if (data.labels?.length) {
       state.labels = data.labels;
       state.activeLabelId = state.labels[0]?.id ?? null;
-      state.activeElementId = null;
+      state.activeElementIds.clear();
       if (data.printSettings) {
         Object.assign(state.printSettings, data.printSettings);
       }
       pushHistory();
       _notifyAll();
       _scheduleSave();
+      gcImages();
       return true;
     }
   } catch (e) {
@@ -527,6 +574,29 @@ function moveElementZIndex(labelId, elementId, direction) {
   _scheduleSave();
 }
 
+async function gcImages() {
+  const referencedImageIds = new Set();
+  for (const label of state.labels) {
+    for (const el of label.elements) {
+      if (el.type === 'image' && el.imageId) {
+        referencedImageIds.add(el.imageId);
+      }
+    }
+  }
+
+  try {
+    const allImages = await dbGetAll(STORES.images);
+    for (const img of allImages) {
+      if (!referencedImageIds.has(img.id)) {
+        await deleteImage(img.id);
+        console.log(`[GC] Deleted orphaned image: ${img.id}`);
+      }
+    }
+  } catch (e) {
+    console.error('Image GC failed:', e);
+  }
+}
+
 /* ---------- Public API ---------- */
 
 export {
@@ -548,11 +618,14 @@ export {
   setSortMode,
   getActiveLabel,
   getActiveElement,
+  getActiveElements,
+  updateActiveElements,
   updateLabel,
   batchUpdateLabels,
   updateElement,
   addElement,
   removeElement,
+  gcImages,
   updatePrintSettings,
   moveElementZIndex,
   getSortedFilteredLabels,

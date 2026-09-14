@@ -150,6 +150,10 @@
                 <input type="range" id="auto-layout-padding" min="0" max="20" step="1" value="8">
               </div>
               <div class="form-group">
+                <label for="auto-layout-gap">Element Gap (<span id="auto-layout-gap-val">2</span>%)</label>
+                <input type="range" id="auto-layout-gap" min="0" max="20" step="1" value="2">
+              </div>
+              <div class="form-group">
                 <label for="auto-layout-valign">Text Vertical Align</label>
                 <select id="auto-layout-valign">
                   <option value="top">Top</option>
@@ -330,7 +334,10 @@
             <i data-lucide="chevron-down"></i>
           </div>
           <div class="sidebar-section-content">
-            <div class="form-group">
+            <button id="btn-merge-text" class="btn btn-secondary btn-sm" style="width: 100%; margin-bottom: 12px; display: none;">
+              <i data-lucide="combine"></i> Merge Text Zones
+            </button>
+            <div class="form-group" id="text-content-group">
               <label for="text-content">Text Content</label>
               <textarea id="text-content" rows="3" style="font-size: 0.85rem; padding: 8px; width: 100%; box-sizing: border-box; resize: vertical;" placeholder="Enter text here..."></textarea>
             </div>
@@ -518,7 +525,21 @@
         <hr style="border: none; border-top: 1px solid var(--border-subtle); margin: 16px 0;">
 
         <!-- Print Summary -->
-        <div id="print-summary" style="margin-bottom: 16px;"></div>
+        <div id="print-summary"></div>
+
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-subtle); margin-bottom: 16px;">
+          <div class="form-row" style="margin-bottom: 8px;">
+            <span style="color: var(--text-secondary); font-size: 0.8rem;">Preview Scale:</span>
+            <button id="btn-toggle-1-1" class="btn btn-ghost btn-sm">1:1 Real Size</button>
+          </div>
+          <div id="scale-slider-container" style="display: none;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <input type="range" id="print-scale-slider" min="0.5" max="2" step="0.01" value="1" style="flex: 1;">
+              <span id="print-scale-val" style="font-size: 0.8rem; width: 35px;">100%</span>
+            </div>
+            <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px;">Adjust so the on-screen preview perfectly matches physical dimensions.</p>
+          </div>
+        </div>
 
         <button id="btn-print" class="btn btn-primary" style="width: 100%; padding: 12px;">
           <i data-lucide="printer"></i> Print Labels

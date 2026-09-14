@@ -59,7 +59,7 @@ function renderPrintPreview() {
     }
 
     // Cut marks
-    if (state.printSettings.showCutMarks && !state.printSettings.singleLabel) {
+    if (state.printSettings.cutMarksType !== 'none' && !state.printSettings.singleLabel) {
       renderCutMarks(pageDiv, page, area, page.grid, screenScale, 'px', true);
     }
 
@@ -153,36 +153,12 @@ function updatePrintSummary(layout, labels) {
       <span style="color: var(--text-secondary); font-size: 0.8rem;">Pages required:</span>
       <strong style="font-size: 0.9rem; color: var(--accent-secondary);">${pages.length}</strong>
     </div>
-    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-subtle);">
-      <div class="form-row" style="margin-bottom: 8px;">
-        <span style="color: var(--text-secondary); font-size: 0.8rem;">Preview Scale:</span>
-        <button id="btn-toggle-1-1" class="btn btn-ghost btn-sm">1:1 Real Size</button>
-      </div>
-      <div id="scale-slider-container" style="display: ${customPrintScale !== null ? 'block' : 'none'};">
-        <div style="display: flex; gap: 10px; align-items: center;">
-          <input type="range" id="print-scale-slider" min="0.5" max="2" step="0.01" value="${customPrintScale || 1}" style="flex: 1;">
-          <span id="print-scale-val" style="font-size: 0.8rem; width: 35px;">${Math.round((customPrintScale || 1)*100)}%</span>
-        </div>
-        <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px;">Adjust so the on-screen preview perfectly matches physical dimensions.</p>
-      </div>
-    </div>
   `;
 
-  // Attach event listeners for 1:1 scaling
-  document.getElementById('btn-toggle-1-1')?.addEventListener('click', () => {
-    if (customPrintScale !== null) {
-      customPrintScale = null; // back to fit
-    } else {
-      customPrintScale = 1; // 1:1 CSS pixels
-    }
-    renderPrintPreview();
-  });
-
-  document.getElementById('print-scale-slider')?.addEventListener('input', (e) => {
-    customPrintScale = parseFloat(e.target.value);
-    document.getElementById('print-scale-val').textContent = `${Math.round(customPrintScale*100)}%`;
-    renderPrintPreview();
-  });
+  const container = document.getElementById('scale-slider-container');
+  if (container) {
+    container.style.display = customPrintScale !== null ? 'block' : 'none';
+  }
 }
 
 /* ---------- Actual Print (physical) ---------- */
@@ -252,7 +228,7 @@ function triggerPrint() {
     }
 
     // Cut marks for physical print
-    if (state.printSettings.showCutMarks && !state.printSettings.singleLabel) {
+    if (state.printSettings.cutMarksType !== 'none' && !state.printSettings.singleLabel) {
       renderCutMarks(pageDiv, page, area, page.grid, 1, 'mm', true);
     }
 
@@ -272,6 +248,29 @@ function triggerPrint() {
 /* ---------- Init ---------- */
 
 function initPrint() {
+  document.getElementById('btn-toggle-1-1')?.addEventListener('click', () => {
+    if (customPrintScale !== null) {
+      customPrintScale = null; // back to fit
+    } else {
+      customPrintScale = 1; // 1:1 CSS pixels
+      const slider = document.getElementById('print-scale-slider');
+      if (slider) slider.value = 1;
+      const val = document.getElementById('print-scale-val');
+      if (val) val.textContent = '100%';
+    }
+    const container = document.getElementById('scale-slider-container');
+    if (container) {
+      container.style.display = customPrintScale !== null ? 'block' : 'none';
+    }
+    renderPrintPreview();
+  });
+
+  document.getElementById('print-scale-slider')?.addEventListener('input', (e) => {
+    customPrintScale = parseFloat(e.target.value);
+    document.getElementById('print-scale-val').textContent = `${Math.round(customPrintScale*100)}%`;
+    renderPrintPreview();
+  });
+
   subscribe(() => {
     if (state.currentView === 'print') {
       renderPrintPreview();
