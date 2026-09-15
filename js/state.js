@@ -106,6 +106,7 @@ const state = {
     gapMM: 2,
     cutMarksType: 'both', // none | inside | outside | both
     singleLabel: false,
+    printSelectedOnly: false,
   },
   zoom: 1,
   currentView: 'editor', // editor | print | import
@@ -574,6 +575,17 @@ function moveElementZIndex(labelId, elementId, direction) {
   _scheduleSave();
 }
 
+function reorderLabel(fromIndex, toIndex) {
+  if (fromIndex === toIndex) return;
+  if (fromIndex < 0 || fromIndex >= state.labels.length) return;
+  if (toIndex < 0 || toIndex >= state.labels.length) return;
+  const [moved] = state.labels.splice(fromIndex, 1);
+  state.labels.splice(toIndex, 0, moved);
+  pushHistory();
+  _notifyAll();
+  _scheduleSave();
+}
+
 async function gcImages() {
   const referencedImageIds = new Set();
   for (const label of state.labels) {
@@ -628,6 +640,7 @@ export {
   gcImages,
   updatePrintSettings,
   moveElementZIndex,
+  reorderLabel,
   getSortedFilteredLabels,
   restoreState,
   exportProject,

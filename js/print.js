@@ -18,9 +18,13 @@ function renderPrintPreview() {
 
   previewArea.innerHTML = '';
 
-  const labels = state.labels;
+  const allLabels = state.labels;
+  const labels = state.printSettings.printSelectedOnly && state.selectedLabelIds.size > 0
+    ? allLabels.filter(l => state.selectedLabelIds.has(l.id))
+    : allLabels;
   if (labels.length === 0) {
-    previewArea.innerHTML = `<div class="empty-state"><h3>No labels to print</h3><p>Create labels in the editor first.</p></div>`;
+    previewArea.innerHTML = `<div class="empty-state"><h3>No labels to print</h3><p>${state.printSettings.printSelectedOnly ? 'No labels selected. Select labels in the editor panel.' : 'Create labels in the editor first.'}</p></div>`;
+    updatePrintSummary(null, allLabels);
     return;
   }
 
@@ -133,6 +137,25 @@ function updatePrintSummary(layout, labels) {
   const summaryEl = document.getElementById('print-summary');
   if (!summaryEl) return;
 
+  // Update selection info
+  const selInfo = document.getElementById('print-selection-info');
+  if (selInfo) {
+    if (state.printSettings.printSelectedOnly) {
+      const selectedCount = state.selectedLabelIds.size;
+      selInfo.textContent = selectedCount > 0
+        ? `${selectedCount} / ${state.labels.length} label(s) selected`
+        : 'No labels selected';
+      selInfo.style.color = selectedCount > 0 ? 'var(--accent-secondary)' : '#ef4444';
+    } else {
+      selInfo.textContent = '';
+    }
+  }
+
+  if (!layout) {
+    summaryEl.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem;">No labels to display</div>`;
+    return;
+  }
+
   const totalLabels = labels.reduce((sum, l) => sum + Math.max(1, l.copies ?? 1), 0);
   const { pages, grid } = layout;
 
@@ -164,7 +187,10 @@ function updatePrintSummary(layout, labels) {
 /* ---------- Actual Print (physical) ---------- */
 
 function triggerPrint() {
-  const labels = state.labels;
+  const allLabels = state.labels;
+  const labels = state.printSettings.printSelectedOnly && state.selectedLabelIds.size > 0
+    ? allLabels.filter(l => state.selectedLabelIds.has(l.id))
+    : allLabels;
   if (labels.length === 0) return;
 
   const layout = computeLayout(labels, state.printSettings);

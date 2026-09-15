@@ -13,6 +13,7 @@ import {
   undo, redo,
   toggleLabelSelection, selectAllLabels, clearSelection, setSearchQuery, setSortMode,
   deleteSelectedLabels, deleteAllLabels, getSortedFilteredLabels,
+  reorderLabel,
 } from './state.js';
 import { initEditor, addImageFromFile, addImageFromUrl, renderPreview } from './editor.js';
 import { initPrint, renderPrintPreview, triggerPrint } from './print.js';
@@ -408,6 +409,30 @@ function setupDimensionInputs() {
   nameInput?.addEventListener('change', () => {
     const label = getActiveLabel();
     if (label) updateLabel(label.id, { name: nameInput.value || 'New Label' });
+  });
+
+  // Apply to all labels button
+  document.getElementById('btn-apply-to-all')?.addEventListener('click', async () => {
+    const label = getActiveLabel();
+    if (!label || state.labels.length <= 1) return;
+    const confirmed = await showConfirmDialog(
+      `Apply dimensions (${label.widthMM}×${label.heightMM} ${label.unit}), background, border, and auto-layout from "${label.name}" to all ${state.labels.length - 1} other label(s)?`,
+      'Apply', 'Cancel'
+    );
+    if (!confirmed) return;
+    for (const other of state.labels) {
+      if (other.id === label.id) continue;
+      updateLabel(other.id, {
+        widthMM: label.widthMM,
+        heightMM: label.heightMM,
+        unit: label.unit,
+        copies: label.copies,
+        background: JSON.parse(JSON.stringify(label.background)),
+        border: JSON.parse(JSON.stringify(label.border)),
+        autoLayout: JSON.parse(JSON.stringify(label.autoLayout)),
+      });
+    }
+    showToast(`Properties applied to ${state.labels.length - 1} label(s)`, 'success');
   });
 }
 
@@ -1050,6 +1075,7 @@ function updateLabelsPanelUI() {
     if (!card) {
       card = document.createElement('div');
       card.dataset.labelId = label.id;
+      card.draggable = true;
       
       // Toggle selection on checkbox click
       card.addEventListener('click', (e) => {
@@ -1058,6 +1084,39 @@ function updateLabelsPanelUI() {
           toggleLabelSelection(label.id);
         } else {
           setActiveLabel(label.id);
+        }
+      });
+
+      // Drag & drop reorder
+      card.addEventListener('dragstart', (e) => {
+        card.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', label.id);
+      });
+      card.addEventListener('dragend', () => {
+        card.classList.remove('dragging');
+        listEl.querySelectorAll('.label-card').forEach(c => c.classList.remove('drag-over'));
+      });
+      card.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const dragging = listEl.querySelector('.dragging');
+        if (dragging && dragging !== card) {
+          card.classList.add('drag-over');
+        }
+      });
+      card.addEventListener('dragleave', () => {
+        card.classList.remove('drag-over');
+      });
+      card.addEventListener('drop', (e) => {
+        e.preventDefault();
+        card.classList.remove('drag-over');
+        const draggedId = e.dataTransfer.getData('text/plain');
+        if (!draggedId || draggedId === label.id) return;
+        const fromIndex = state.labels.findIndex(l => l.id === draggedId);
+        const toIndex = state.labels.findIndex(l => l.id === label.id);
+        if (fromIndex !== -1 && toIndex !== -1) {
+          reorderLabel(fromIndex, toIndex);
         }
       });
     }
@@ -1156,6 +1215,11 @@ function setupPrintPanel() {
 
   singleLabel?.addEventListener('change', () => {
     updatePrintSettings({ singleLabel: singleLabel.checked });
+  });
+
+  const printSelectedOnly = document.getElementById('print-selected-only');
+  printSelectedOnly?.addEventListener('change', () => {
+    updatePrintSettings({ printSelectedOnly: printSelectedOnly.checked });
   });
 
   document.getElementById('btn-print')?.addEventListener('click', () => {

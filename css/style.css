@@ -699,6 +699,16 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
 .label-card-actions button:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
 .label-card-actions button.delete-btn:hover { color: var(--error); }
 
+/* Drag & Drop reorder */
+.label-card.dragging {
+  opacity: 0.35;
+  transform: scale(0.97);
+}
+.label-card.drag-over {
+  border-top: 2px solid var(--accent-secondary);
+  margin-top: -1px;
+}
+
 /* ===========================
    View: Print Preview
    =========================== */
