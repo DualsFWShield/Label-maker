@@ -39,19 +39,43 @@ function renderLabelContentForWord(label) {
   const textElements = label.elements.filter(el => el.type === 'text');
   const imageElements = label.elements.filter(el => el.type === 'image');
 
-  // Build text HTML
-  const textHTML = textElements.map((el, idx) => {
-    const fontWeight = el.fontWeight === 'bold' ? 'bold' : 'normal';
-    const fontStyle = el.fontStyle === 'italic' ? 'italic' : 'normal';
-    const textDecoration = el.textDecoration && el.textDecoration !== 'none' ? `text-decoration: ${el.textDecoration};` : '';
-    const textTransform = el.textTransform && el.textTransform !== 'none' ? `text-transform: ${el.textTransform};` : '';
-    const highlightBg = el.highlightColor && el.highlightColor !== 'transparent' && el.highlightColor !== '#ffffff' ? `background-color: ${el.highlightColor};` : '';
-    const content = escapeHTML(el.content || '').replace(/\n/g, '<br>');
-    const marginBottom = idx < textElements.length - 1 ? `margin-bottom: ${zones?.gap ?? 2}%;` : '';
-    const fontCSS = fontFamilyCSS(el.fontFamily);
+  // Build text HTML (supporting multi-column widthPercent)
+  let rows = [];
+  let currentRow = { widthPercent: 0, elements: [] };
+  const isHorizontal = label.autoLayout?.textDirection === 'horizontal';
 
-    return `<p style="margin: 0; ${marginBottom} font-family: ${fontCSS}; font-size: ${el.fontSize}pt; color: ${el.color}; font-weight: ${fontWeight}; font-style: ${fontStyle}; text-align: ${el.textAlign || 'center'}; line-height: ${el.lineHeight || 1.4}; letter-spacing: ${el.letterSpacing || 0}px; ${textDecoration} ${textTransform} ${highlightBg}">${content}</p>`;
-  }).join('\n');
+  textElements.forEach((el) => {
+    const wPct = isHorizontal ? (100 / textElements.length) : (el.widthPercent || 100);
+    if (currentRow.widthPercent + wPct > 100.01 && currentRow.elements.length > 0) {
+      rows.push(currentRow);
+      currentRow = { widthPercent: 0, elements: [] };
+    }
+    currentRow.elements.push({ el, wPct });
+    currentRow.widthPercent += wPct;
+  });
+  if (currentRow.elements.length > 0) rows.push(currentRow);
+
+  const textHTML = `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout: fixed;">
+    ${rows.map((row, rowIdx) => {
+      const marginBottom = rowIdx < rows.length - 1 ? `margin-bottom: ${zones?.gap ?? 2}%;` : '';
+      return `<tr>
+        ${row.elements.map(item => {
+          const el = item.el;
+          const fontWeight = el.fontWeight === 'bold' ? 'bold' : 'normal';
+          const fontStyle = el.fontStyle === 'italic' ? 'italic' : 'normal';
+          const textDecoration = el.textDecoration && el.textDecoration !== 'none' ? `text-decoration: ${el.textDecoration};` : '';
+          const textTransform = el.textTransform && el.textTransform !== 'none' ? `text-transform: ${el.textTransform};` : '';
+          const highlightBg = el.highlightColor && el.highlightColor !== 'transparent' && el.highlightColor !== '#ffffff' ? `background-color: ${el.highlightColor};` : '';
+          const content = escapeHTML(el.content || '').replace(/\n/g, '<br>');
+          const fontCSS = fontFamilyCSS(el.fontFamily);
+          
+          return `<td width="${item.wPct}%" valign="${zones?.vAlign ?? 'middle'}">
+            <p style="margin: 0; ${marginBottom} font-family: ${fontCSS}; font-size: ${el.fontSize}pt; color: ${el.color}; font-weight: ${fontWeight}; font-style: ${fontStyle}; text-align: ${el.textAlign || 'center'}; line-height: ${el.lineHeight || 1.4}; letter-spacing: ${el.letterSpacing || 0}px; ${textDecoration} ${textTransform} ${highlightBg}">${content}</p>
+          </td>`;
+        }).join('')}
+      </tr>`;
+    }).join('\n')}
+  </table>`;
 
   // Build image HTML
   const imageHTML = imageElements.map(el => {
@@ -100,9 +124,9 @@ function renderLabelContentForWord(label) {
     ${textHTML}
   </td></tr>`;
 
-  const rows = imgPos === 'top' ? imgRow + textRow : textRow + imgRow;
+  const layoutRows = imgPos === 'top' ? imgRow + textRow : textRow + imgRow;
   return `<table width="100%" height="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout: fixed;">
-    ${rows}
+    ${layoutRows}
   </table>`;
 }
 
@@ -232,17 +256,30 @@ export function exportLabelsToWord() {
         }
 
         // Border CSS (label's own border takes precedence over cut marks)
-        let borderCSS = cellBorderStyle;
+        let tdBorderCSS = cellBorderStyle;
+        let innerWrapperStart = '';
+        let innerWrapperEnd = '';
+        
         if (lbl.border?.enabled) {
-          borderCSS = `border: ${lbl.border.width}px ${lbl.border.style} ${lbl.border.color};`;
-          if (lbl.border.radius > 0) {
-            borderCSS += ` border-radius: ${lbl.border.radius}px;`;
+          const b = lbl.border;
+          const bCSS = `border: ${b.width}px ${b.style} ${b.color}; ${b.radius > 0 ? `border-radius: ${b.radius}px;` : ''}`;
+          
+          if (b.padding > 0) {
+            // Apply inset frame via nested table
+            tdBorderCSS = cellBorderStyle + ` padding: ${b.padding}mm;`;
+            innerWrapperStart = `<table width="100%" height="100%" cellpadding="0" cellspacing="0" border="0" style="${bCSS} box-sizing: border-box;"><tr><td style="padding: 0; margin: 0; vertical-align: top;">`;
+            innerWrapperEnd = `</td></tr></table>`;
+          } else {
+            // Standard edge border
+            tdBorderCSS = bCSS;
           }
         }
 
         // Render cell
-        html += `\n    <td class="label-cell" style="width: ${cellW}mm; height: ${cellH}mm; mso-height-rule: exactly; ${bgCSS} ${borderCSS}">`;
+        html += `\n    <td class="label-cell" style="width: ${cellW}mm; height: ${cellH}mm; mso-height-rule: exactly; ${bgCSS} ${tdBorderCSS}">`;
+        html += innerWrapperStart;
         html += renderLabelContentForWord(lbl);
+        html += innerWrapperEnd;
         html += `\n    </td>`;
       });
 

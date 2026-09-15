@@ -135,6 +135,13 @@
             </div>
             <div id="auto-layout-options">
               <div class="form-group">
+                <label for="auto-layout-direction">Text Flow Direction</label>
+                <select id="auto-layout-direction">
+                  <option value="vertical">Vertical (Stacked)</option>
+                  <option value="horizontal">Horizontal (Side-by-side)</option>
+                </select>
+              </div>
+              <div class="form-group">
                 <label for="auto-layout-img-position">Image Position</label>
                 <select id="auto-layout-img-position">
                   <option value="left">Left</option>
@@ -244,45 +251,47 @@
           </div>
         </div>
 
-        <!-- Border -->
+        <!-- ICE Tool (Advanced Borders) -->
         <div class="sidebar-section">
           <div class="sidebar-section-header">
-            <h3>Border</h3>
+            <h3><i data-lucide="snowflake" style="width: 16px; height: 16px; margin-right: 4px; color: #00d2ff;"></i> ICE Tool (Frames)</h3>
             <i data-lucide="chevron-down"></i>
           </div>
           <div class="sidebar-section-content">
-            <div class="form-group">
-              <div class="toggle-wrapper">
-                <label class="toggle">
-                  <input type="checkbox" id="border-enabled">
-                  <div class="toggle-track"></div>
-                </label>
-                <span style="font-size: 0.8rem; color: var(--text-secondary);">Enable border</span>
-              </div>
+            <div class="form-group" style="display: flex; align-items: center; justify-content: space-between;">
+              <label for="border-enabled" style="margin: 0; font-weight: 600;">Enable Frame</label>
+              <input type="checkbox" id="border-enabled">
             </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="border-width">Width</label>
-                <input type="number" id="border-width" min="0" max="20" value="1">
+            <div id="border-options" style="opacity: 0.5; pointer-events: none; margin-top: 12px; display: flex; flex-direction: column; gap: 12px;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="border-style">Style</label>
+                  <select id="border-style">
+                    <option value="solid">Solid</option>
+                    <option value="dashed">Dashed</option>
+                    <option value="dotted">Dotted</option>
+                    <option value="double">Double</option>
+                    <option value="ridge">Ridge (3D)</option>
+                    <option value="groove">Groove (3D)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="border-color">Color</label>
+                  <input type="color" id="border-color" value="#000000">
+                </div>
               </div>
               <div class="form-group">
-                <label for="border-style">Style</label>
-                <select id="border-style">
-                  <option value="solid">Solid</option>
-                  <option value="dashed">Dashed</option>
-                  <option value="dotted">Dotted</option>
-                  <option value="double">Double</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="border-color">Color</label>
-                <input type="color" id="border-color" value="#000000">
+                <label for="border-width">Thickness (<span id="border-width-val">1</span>px)</label>
+                <input type="range" id="border-width" min="1" max="20" step="1" value="1">
               </div>
               <div class="form-group">
-                <label for="border-radius">Radius</label>
-                <input type="number" id="border-radius" min="0" max="100" value="0">
+                <label for="border-radius">Corner Roundness (<span id="border-radius-val">0</span>px)</label>
+                <input type="range" id="border-radius" min="0" max="50" step="1" value="0">
+              </div>
+              <!-- Inner Padding for Frame effect -->
+              <div class="form-group">
+                <label for="border-padding">Frame Inset / Margin (<span id="border-padding-val">0</span>mm)</label>
+                <input type="range" id="border-padding" min="0" max="20" step="1" value="0">
               </div>
             </div>
           </div>
@@ -306,7 +315,17 @@
             <button id="btn-add-image-url" class="btn btn-ghost btn-sm" style="width: 100%; margin-bottom: 8px;">
               <i data-lucide="link"></i> Image from URL
             </button>
+            <div style="margin-bottom: 8px; font-weight: 600; font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; margin-top: 16px;">Layers (Drag to reorder)</div>
+            <ul id="layers-list" style="list-style: none; padding: 0; margin: 0 0 12px 0; display: flex; flex-direction: column; gap: 4px;"></ul>
             <div id="element-section" style="display: none;">
+              <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                <button id="btn-element-up" class="btn btn-secondary btn-sm" style="flex: 1;" title="Move up (or bring forward)">
+                  <i data-lucide="arrow-up"></i> Move Up
+                </button>
+                <button id="btn-element-down" class="btn btn-secondary btn-sm" style="flex: 1;" title="Move down (or send backward)">
+                  <i data-lucide="arrow-down"></i> Move Down
+                </button>
+              </div>
               <button id="btn-delete-element" class="btn btn-danger btn-sm" style="width: 100%;">
                 <i data-lucide="trash-2"></i> Delete Element
               </button>
@@ -343,6 +362,16 @@
             <div class="form-group" id="text-content-group">
               <label for="text-content">Text Content</label>
               <textarea id="text-content" rows="3" style="font-size: 0.85rem; padding: 8px; width: 100%; box-sizing: border-box; resize: vertical;" placeholder="Enter text here..."></textarea>
+            </div>
+            <div class="form-group" id="text-width-group">
+              <label for="text-width-percent">Auto-Layout Width</label>
+              <select id="text-width-percent">
+                <option value="100">100% (Full Row)</option>
+                <option value="75">75% (3/4 Row)</option>
+                <option value="50">50% (Half Row)</option>
+                <option value="33">33% (Third Row)</option>
+                <option value="25">25% (Quarter Row)</option>
+              </select>
             </div>
             <div class="form-group">
               <label for="font-category">Category</label>

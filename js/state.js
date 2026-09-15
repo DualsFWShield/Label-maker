@@ -16,6 +16,7 @@ function createDefaultTextElement(overrides = {}) {
     y: 10,           // % from top
     width: 80,       // % of label width
     height: 30,      // % of label height
+    widthPercent: 100, // For auto-layout: 100%, 50%, 33%, etc.
     fontFamily: 'Inter',
     fontSize: 16,    // pt
     fontWeight: 'normal',
@@ -79,6 +80,7 @@ function createDefaultLabel(overrides = {}) {
       style: 'solid',
       color: '#000000',
       radius: 0,           // px
+      padding: 0,          // mm (ICE Tool frame inset)
     },
     autoLayout: {
       enabled: true,          // Auto-position elements
@@ -87,6 +89,7 @@ function createDefaultLabel(overrides = {}) {
       padding: 8,             // % padding inside label
       gap: 2,                 // % gap between elements
       textVerticalAlign: 'center', // top | center | bottom
+      textDirection: 'vertical', // vertical | horizontal
     },
     copies: 1,
     ...overrides,
@@ -560,16 +563,31 @@ function moveElementZIndex(labelId, elementId, direction) {
   const idx = label.elements.findIndex((el) => el.id === elementId);
   if (idx === -1) return;
 
-  if (direction === 'up' && idx < label.elements.length - 1) {
-    const el = label.elements.splice(idx, 1)[0];
-    label.elements.splice(idx + 1, 0, el);
-  } else if (direction === 'down' && idx > 0) {
+  if (direction === 'up' && idx > 0) {
     const el = label.elements.splice(idx, 1)[0];
     label.elements.splice(idx - 1, 0, el);
+  } else if (direction === 'down' && idx < label.elements.length - 1) {
+    const el = label.elements.splice(idx, 1)[0];
+    label.elements.splice(idx + 1, 0, el);
   } else {
     return; // No change
   }
 
+  pushHistory();
+  _notifyAll();
+  _scheduleSave();
+}
+
+function reorderElement(labelId, fromIndex, toIndex) {
+  const label = state.labels.find((l) => l.id === labelId);
+  if (!label) return;
+  if (fromIndex === toIndex) return;
+  if (fromIndex < 0 || fromIndex >= label.elements.length) return;
+  if (toIndex < 0 || toIndex >= label.elements.length) return;
+  
+  const [moved] = label.elements.splice(fromIndex, 1);
+  label.elements.splice(toIndex, 0, moved);
+  
   pushHistory();
   _notifyAll();
   _scheduleSave();
@@ -640,6 +658,7 @@ export {
   gcImages,
   updatePrintSettings,
   moveElementZIndex,
+  reorderElement,
   reorderLabel,
   getSortedFilteredLabels,
   restoreState,

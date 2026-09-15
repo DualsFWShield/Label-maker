@@ -98,17 +98,33 @@ function computeAutoLayout(label) {
     }
   }
 
-  // Layout text elements: pack tightly vertically inside textZone
+  // Layout text elements: pack tightly using rows (flex-wrap style) based on widthPercent
   if (textElements.length > 0) {
-    // Calculate required height for each line using real DOM measurement (handles word wrapping)
-    const availableWidthMM = label.widthMM * (textZone.w / 100);
-    const heights = textElements.map((el) => {
-      const hMM = measureTextHeightMM(el, availableWidthMM);
-      return (hMM / label.heightMM) * 100;
-    });
+    const textZoneWidthMM = label.widthMM * (textZone.w / 100);
+    const isHorizontal = layout.textDirection === 'horizontal';
+    let rows = [];
+    let currentRow = { widthPercent: 0, elements: [], heightPercent: 0 };
 
-    const elementGap = textElements.length > 1 ? (layout.gap ?? 2) : 0; // Configurable % gap between elements
-    const totalNeeded = heights.reduce((sum, h) => sum + h, 0) + (textElements.length - 1) * elementGap;
+    textElements.forEach((el) => {
+      const wPct = isHorizontal ? (100 / textElements.length) : (el.widthPercent || 100);
+      // Wrap to new line if it exceeds 100.01% (allowing tiny float errors) and row is not empty
+      if (currentRow.widthPercent + wPct > 100.01 && currentRow.elements.length > 0) {
+        rows.push(currentRow);
+        currentRow = { widthPercent: 0, elements: [], heightPercent: 0 };
+      }
+
+      const elAvailableWidthMM = textZoneWidthMM * (wPct / 100);
+      const hMM = measureTextHeightMM(el, elAvailableWidthMM);
+      const hPct = (hMM / label.heightMM) * 100;
+
+      currentRow.elements.push({ el, wPct, hPct });
+      currentRow.widthPercent += wPct;
+      currentRow.heightPercent = Math.max(currentRow.heightPercent, hPct); // Row height is max element height
+    });
+    if (currentRow.elements.length > 0) rows.push(currentRow);
+
+    const elementGap = rows.length > 1 ? (layout.gap ?? 2) : 0;
+    const totalNeeded = rows.reduce((sum, row) => sum + row.heightPercent, 0) + (rows.length - 1) * elementGap;
     
     let useTightPacking = totalNeeded <= textZone.h;
     
@@ -121,27 +137,36 @@ function computeAutoLayout(label) {
       }
       
       let currentY = startY;
-      textElements.forEach((el, idx) => {
-        const h = heights[idx];
-        positions.set(el.id, {
-          x: textZone.x,
-          y: currentY,
-          width: textZone.w,
-          height: h,
-          vAlign: 'center', // perfectly wrapped, so center inside its own box
+      rows.forEach(row => {
+        let currentX = textZone.x;
+        row.elements.forEach(item => {
+          const w = textZone.w * (item.wPct / 100);
+          positions.set(item.el.id, {
+            x: currentX,
+            y: currentY,
+            width: w,
+            height: row.heightPercent, // all items in row take the row height for vertical centering
+            vAlign: 'center',
+          });
+          currentX += w;
         });
-        currentY += h + elementGap;
+        currentY += row.heightPercent + elementGap;
       });
     } else {
       // Fallback: distribute evenly if they don't fit
-      const lineH = textZone.h / textElements.length;
-      textElements.forEach((el, idx) => {
-        positions.set(el.id, {
-          x: textZone.x,
-          y: textZone.y + idx * lineH,
-          width: textZone.w,
-          height: lineH,
-          vAlign: vAlign,
+      const rowH = textZone.h / rows.length;
+      rows.forEach((row, idx) => {
+        let currentX = textZone.x;
+        row.elements.forEach(item => {
+          const w = textZone.w * (item.wPct / 100);
+          positions.set(item.el.id, {
+            x: currentX,
+            y: textZone.y + idx * rowH,
+            width: w,
+            height: rowH,
+            vAlign: vAlign,
+          });
+          currentX += w;
         });
       });
     }
@@ -337,12 +362,26 @@ function applyBackground(el, bg) {
 }
 
 function applyBorder(el, border) {
+  let frame = el.querySelector('.label-ice-frame');
   if (border.enabled) {
-    el.style.border = `${border.width}px ${border.style} ${border.color}`;
-    el.style.borderRadius = `${border.radius}px`;
+    if (!frame) {
+      frame = document.createElement('div');
+      frame.className = 'label-ice-frame';
+      frame.style.position = 'absolute';
+      frame.style.pointerEvents = 'none';
+      frame.style.boxSizing = 'border-box';
+      frame.style.zIndex = '9999';
+      el.appendChild(frame);
+    }
+    const padMM = border.padding || 0;
+    frame.style.left = `${padMM}mm`;
+    frame.style.top = `${padMM}mm`;
+    frame.style.width = `calc(100% - ${padMM * 2}mm)`;
+    frame.style.height = `calc(100% - ${padMM * 2}mm)`;
+    frame.style.border = `${border.width}px ${border.style} ${border.color}`;
+    frame.style.borderRadius = `${border.radius}px`;
   } else {
-    el.style.border = 'none';
-    el.style.borderRadius = '0';
+    if (frame) frame.remove();
   }
 }
 

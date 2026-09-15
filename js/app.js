@@ -13,7 +13,7 @@ import {
   undo, redo,
   toggleLabelSelection, selectAllLabels, clearSelection, setSearchQuery, setSortMode,
   deleteSelectedLabels, deleteAllLabels, getSortedFilteredLabels,
-  reorderLabel,
+  reorderLabel, moveElementZIndex, reorderElement
 } from './state.js';
 import { initEditor, addImageFromFile, addImageFromUrl, renderPreview } from './editor.js';
 import { initPrint, renderPrintPreview, triggerPrint } from './print.js';
@@ -437,66 +437,51 @@ function setupDimensionInputs() {
 }
 
 function setupAutoLayoutControls() {
-  const enabledToggle = document.getElementById('auto-layout-enabled');
-  const optionsDiv = document.getElementById('auto-layout-options');
-  const imgPosition = document.getElementById('auto-layout-img-position');
-  const imgSize = document.getElementById('auto-layout-img-size');
-  const padding = document.getElementById('auto-layout-padding');
-  const gap = document.getElementById('auto-layout-gap');
-  const vAlign = document.getElementById('auto-layout-valign');
-  const imgSizeVal = document.getElementById('auto-layout-img-size-val');
-  const paddingVal = document.getElementById('auto-layout-padding-val');
-  const gapVal = document.getElementById('auto-layout-gap-val');
+  const alEnabled = document.getElementById('auto-layout-enabled');
+  const alDirection = document.getElementById('auto-layout-direction');
+  const alImgPos = document.getElementById('auto-layout-img-position');
+  const alImgSize = document.getElementById('auto-layout-img-size');
+  const alPadding = document.getElementById('auto-layout-padding');
+  const alGap = document.getElementById('auto-layout-gap');
+  const alValign = document.getElementById('auto-layout-valign');
+  const alOptions = document.getElementById('auto-layout-options');
 
-  enabledToggle?.addEventListener('change', () => {
+  alEnabled?.addEventListener('change', () => {
     const label = getActiveLabel();
     if (label) {
-      const autoLayout = { ...label.autoLayout, enabled: enabledToggle.checked };
-      updateLabel(label.id, { autoLayout });
+      const al = { ...label.autoLayout, enabled: alEnabled.checked };
+      updateLabel(label.id, { autoLayout: al });
+      if (alOptions) {
+        alOptions.style.opacity = alEnabled.checked ? '1' : '0.5';
+        alOptions.style.pointerEvents = alEnabled.checked ? 'auto' : 'none';
+      }
     }
   });
 
-  imgPosition?.addEventListener('change', () => {
-    const label = getActiveLabel();
-    if (label) {
-      const autoLayout = { ...label.autoLayout, imagePosition: imgPosition.value };
-      updateLabel(label.id, { autoLayout });
-    }
-  });
-
-  imgSize?.addEventListener('input', () => {
-    if (imgSizeVal) imgSizeVal.textContent = imgSize.value;
-    const label = getActiveLabel();
-    if (label) {
-      const autoLayout = { ...label.autoLayout, imageSizePercent: parseInt(imgSize.value) };
-      updateLabel(label.id, { autoLayout });
-    }
-  });
-
-  padding?.addEventListener('input', () => {
-    if (paddingVal) paddingVal.textContent = padding.value;
-    const label = getActiveLabel();
-    if (label) {
-      const autoLayout = { ...label.autoLayout, padding: parseInt(padding.value) };
-      updateLabel(label.id, { autoLayout });
-    }
-  });
-
-  gap?.addEventListener('input', () => {
-    if (gapVal) gapVal.textContent = gap.value;
-    const label = getActiveLabel();
-    if (label) {
-      const autoLayout = { ...label.autoLayout, gap: parseInt(gap.value) };
-      updateLabel(label.id, { autoLayout });
-    }
-  });
-
-  vAlign?.addEventListener('change', () => {
-    const label = getActiveLabel();
-    if (label) {
-      const autoLayout = { ...label.autoLayout, textVerticalAlign: vAlign.value };
-      updateLabel(label.id, { autoLayout });
-    }
+  [alDirection, alImgPos, alImgSize, alPadding, alGap, alValign].forEach((el) => {
+    el?.addEventListener('input', () => {
+      const label = getActiveLabel();
+      if (label) {
+        const al = {
+          ...label.autoLayout,
+          textDirection: alDirection?.value || 'vertical',
+          imagePosition: alImgPos?.value || 'left',
+          imageSizePercent: parseInt(alImgSize?.value) || 30,
+          padding: parseInt(alPadding?.value) || 0,
+          gap: parseInt(alGap?.value) || 0,
+          textVerticalAlign: alValign?.value || 'center',
+        };
+        updateLabel(label.id, { autoLayout: al });
+        
+        // Update labels
+        const sizeVal = document.getElementById('auto-layout-img-size-val');
+        const padVal = document.getElementById('auto-layout-padding-val');
+        const gapVal = document.getElementById('auto-layout-gap-val');
+        if (sizeVal) sizeVal.textContent = al.imageSizePercent;
+        if (padVal) padVal.textContent = al.padding;
+        if (gapVal) gapVal.textContent = al.gap;
+      }
+    });
   });
 }
 
@@ -593,16 +578,22 @@ function setupBorderControls() {
   const borderStyle = document.getElementById('border-style');
   const borderColor = document.getElementById('border-color');
   const borderRadius = document.getElementById('border-radius');
+  const borderPadding = document.getElementById('border-padding');
+  const borderOptions = document.getElementById('border-options');
 
   borderEnabled?.addEventListener('change', () => {
     const label = getActiveLabel();
     if (label) {
       const border = { ...label.border, enabled: borderEnabled.checked };
       updateLabel(label.id, { border });
+      if (borderOptions) {
+        borderOptions.style.opacity = borderEnabled.checked ? '1' : '0.5';
+        borderOptions.style.pointerEvents = borderEnabled.checked ? 'auto' : 'none';
+      }
     }
   });
 
-  [borderWidth, borderStyle, borderColor, borderRadius].forEach((el) => {
+  [borderWidth, borderStyle, borderColor, borderRadius, borderPadding].forEach((el) => {
     el?.addEventListener('input', () => {
       const label = getActiveLabel();
       if (label) {
@@ -612,8 +603,17 @@ function setupBorderControls() {
           style: borderStyle.value,
           color: borderColor.value,
           radius: parseFloat(borderRadius.value) || 0,
+          padding: parseFloat(borderPadding.value) || 0,
         };
         updateLabel(label.id, { border });
+        
+        // Update labels
+        const wVal = document.getElementById('border-width-val');
+        const rVal = document.getElementById('border-radius-val');
+        const pVal = document.getElementById('border-padding-val');
+        if (wVal) wVal.textContent = border.width;
+        if (rVal) rVal.textContent = border.radius;
+        if (pVal) pVal.textContent = border.padding;
       }
     });
   });
@@ -635,6 +635,15 @@ function setupTypographyControls() {
     const label = getActiveLabel();
     if (els.length === 1 && label) {
       updateElement(label.id, els[0].id, { content: textContent.value });
+    }
+  });
+
+  const textWidth = document.getElementById('text-width-percent');
+  textWidth?.addEventListener('change', () => {
+    const els = getActiveElements().filter(el => el.type === 'text');
+    const label = getActiveLabel();
+    if (els.length === 1 && label) {
+      updateElement(label.id, els[0].id, { widthPercent: parseFloat(textWidth.value) || 100 });
     }
   });
 
@@ -823,6 +832,18 @@ function setupElementActions() {
     }
   });
 
+  document.getElementById('btn-element-up')?.addEventListener('click', () => {
+    const label = getActiveLabel();
+    const el = getActiveElement();
+    if (label && el) moveElementZIndex(label.id, el.id, 'up');
+  });
+
+  document.getElementById('btn-element-down')?.addEventListener('click', () => {
+    const label = getActiveLabel();
+    const el = getActiveElement();
+    if (label && el) moveElementZIndex(label.id, el.id, 'down');
+  });
+
   document.getElementById('btn-delete-element')?.addEventListener('click', () => {
     const label = getActiveLabel();
     const el = getActiveElement();
@@ -889,6 +910,7 @@ function updateSidebarUI() {
     autoLayoutOptions.style.opacity = label.autoLayout?.enabled ? '1' : '0.5';
     autoLayoutOptions.style.pointerEvents = label.autoLayout?.enabled ? 'auto' : 'none';
   }
+  setInputValue('auto-layout-direction', label.autoLayout?.textDirection ?? 'vertical');
   setInputValue('auto-layout-img-position', label.autoLayout?.imagePosition ?? 'left');
   setInputValue('auto-layout-img-size', label.autoLayout?.imageSizePercent ?? 30);
   setInputValue('auto-layout-padding', label.autoLayout?.padding ?? 8);
@@ -920,12 +942,27 @@ function updateSidebarUI() {
   toggleBackgroundSections(label.background.type);
 
   // Border
-    const borderCheckbox = document.getElementById('border-enabled');
-  if (borderCheckbox) borderCheckbox.checked = label.border.enabled;
+  if (document.getElementById('border-enabled')) {
+    document.getElementById('border-enabled').checked = label.border.enabled;
+    const borderOptions = document.getElementById('border-options');
+    if (borderOptions) {
+      borderOptions.style.opacity = label.border.enabled ? '1' : '0.5';
+      borderOptions.style.pointerEvents = label.border.enabled ? 'auto' : 'none';
+    }
+  }
   setInputValue('border-width', label.border.width);
   setInputValue('border-style', label.border.style);
   setInputValue('border-color', label.border.color);
   setInputValue('border-radius', label.border.radius);
+  setInputValue('border-padding', label.border.padding || 0);
+  
+  // Update UI values
+  const wVal = document.getElementById('border-width-val');
+  const rVal = document.getElementById('border-radius-val');
+  const pVal = document.getElementById('border-padding-val');
+  if (wVal) wVal.textContent = label.border.width;
+  if (rVal) rVal.textContent = label.border.radius;
+  if (pVal) pVal.textContent = label.border.padding || 0;
   
   // Element properties
   const typoSection = document.getElementById('typography-section');
@@ -955,13 +992,85 @@ function updateSidebarUI() {
     }
   }
 
+  // Populate Layers List
+  const layersList = document.getElementById('layers-list');
+  if (layersList) {
+    layersList.innerHTML = '';
+    label.elements.forEach((el, index) => {
+      const li = document.createElement('li');
+      li.className = 'layer-item';
+      li.style.padding = '6px 8px';
+      li.style.backgroundColor = state.activeElementIds.has(el.id) ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
+      li.style.borderRadius = '4px';
+      li.style.cursor = 'grab';
+      li.style.display = 'flex';
+      li.style.alignItems = 'center';
+      li.style.gap = '8px';
+      li.style.fontSize = '0.85rem';
+      li.draggable = true;
+      li.dataset.index = index;
+      li.dataset.id = el.id;
+
+      const icon = document.createElement('i');
+      icon.dataset.lucide = el.type === 'image' ? 'image' : 'type';
+      icon.style.width = '14px';
+      icon.style.height = '14px';
+      
+      const text = document.createElement('span');
+      text.textContent = el.type === 'text' ? (el.content || 'Empty Text') : 'Image Element';
+      text.style.flex = '1';
+      text.style.whiteSpace = 'nowrap';
+      text.style.overflow = 'hidden';
+      text.style.textOverflow = 'ellipsis';
+
+      li.appendChild(icon);
+      li.appendChild(text);
+
+      li.addEventListener('click', () => setActiveElement(label.id, el.id));
+      
+      // Drag & Drop
+      li.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', index.toString());
+        e.dataTransfer.effectAllowed = 'move';
+        li.style.opacity = '0.5';
+      });
+      li.addEventListener('dragend', () => {
+        li.style.opacity = '1';
+        document.querySelectorAll('.layer-item').forEach(i => i.style.borderTop = 'none');
+      });
+      li.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        document.querySelectorAll('.layer-item').forEach(i => i.style.borderTop = 'none');
+        li.style.borderTop = '2px solid var(--primary)';
+      });
+      li.addEventListener('dragleave', () => {
+        li.style.borderTop = 'none';
+      });
+      li.addEventListener('drop', (e) => {
+        e.preventDefault();
+        li.style.borderTop = 'none';
+        const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+        const toIndex = index;
+        if (!isNaN(fromIndex) && fromIndex !== toIndex) {
+          reorderElement(label.id, fromIndex, toIndex);
+        }
+      });
+
+      layersList.appendChild(li);
+    });
+    // Re-initialize lucide icons for new elements
+    if (window.lucide) window.lucide.createIcons();
+  }
+
   // Populate fields based on the first selected element
   if (hasText) {
     setInputValue('text-content', element.content || '');
+    setInputValue('text-width-percent', element.widthPercent || 100);
     setInputValue('font-select', element.fontFamily);
     setInputValue('font-size', element.fontSize);
     setInputValue('text-color', element.color);
-    setInputValue('highlight-color', element.highlightColor || '#ffffff');
+    setInputValue('highlight-color', (element.highlightColor && element.highlightColor !== 'transparent') ? element.highlightColor : '#ffffff');
     setInputValue('text-align', element.textAlign);
     setInputValue('line-height', element.lineHeight);
     setInputValue('letter-spacing', element.letterSpacing);
